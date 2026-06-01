@@ -8,3 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables
+.env
+.env.local
+
+# Application data
+tracked_repos.json
+
+# Logs
+mcp_server.log
+*.log
