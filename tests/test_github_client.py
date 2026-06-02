@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from github_client import get_trending, get_repo_details
+import httpx
+
+from github_client import get_trending, get_repo_details, GitHubAPIError
 
 
 def _make_fake_item(
@@ -236,3 +238,139 @@ async def test_repo_details_topics_none_daje_pusta_liste():
         result = await get_repo_details("owner/repo")
 
     assert result["topics"] == []
+
+
+# ===========================================================================
+# Testy obsługi błędów GitHub API (TASK-007a)
+# ===========================================================================
+
+
+def _make_error_response(status_code: int) -> MagicMock:
+    """Zwraca zamockowany response, którego raise_for_status rzuca HTTPStatusError."""
+    request = httpx.Request("GET", "https://api.github.com/test")
+    real_response = httpx.Response(status_code, request=request)
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError(
+            f"HTTP error {status_code}",
+            request=request,
+            response=real_response,
+        )
+    )
+    return mock_response
+
+
+def _make_network_error_client():
+    """Zwraca patch zastępujący AsyncClient tak, by client.get rzucał RequestError."""
+    request = httpx.Request("GET", "https://api.github.com/test")
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(
+        side_effect=httpx.RequestError("boom", request=request)
+    )
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    return patch("github_client.httpx.AsyncClient", return_value=mock_client)
+
+
+# ---------------------------------------------------------------------------
+# Test 10 – get_repo_details: status 404 → GitHubAPIError z "not found" i nazwą repo
+# ---------------------------------------------------------------------------
+async def test_repo_details_404_raises_not_found():
+    mock_response = _make_error_response(404)
+
+    with _patch_repo_client(mock_response):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_repo_details("owner/missing-repo")
+
+    message = str(exc_info.value).lower()
+    assert "owner/missing-repo" in str(exc_info.value)
+    assert "not found" in message
+
+
+# ---------------------------------------------------------------------------
+# Test 11 – get_repo_details: status 403 → GitHubAPIError z "rate limit"
+# ---------------------------------------------------------------------------
+async def test_repo_details_403_raises_rate_limit():
+    mock_response = _make_error_response(403)
+
+    with _patch_repo_client(mock_response):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_repo_details("owner/repo")
+
+    assert "rate limit" in str(exc_info.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# Test 12 – get_repo_details: status 429 → GitHubAPIError z "rate limit"
+# ---------------------------------------------------------------------------
+async def test_repo_details_429_raises_rate_limit():
+    mock_response = _make_error_response(429)
+
+    with _patch_repo_client(mock_response):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_repo_details("owner/repo")
+
+    assert "rate limit" in str(exc_info.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# Test 13 – get_repo_details: status 500 → GitHubAPIError z "HTTP 500"
+# ---------------------------------------------------------------------------
+async def test_repo_details_500_raises_http_error():
+    mock_response = _make_error_response(500)
+
+    with _patch_repo_client(mock_response):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_repo_details("owner/repo")
+
+    assert "500" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Test 14 – get_repo_details: błąd sieci → GitHubAPIError z "network" lub "timeout"
+# ---------------------------------------------------------------------------
+async def test_repo_details_network_error_raises_github_api_error():
+    with _make_network_error_client():
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_repo_details("owner/repo")
+
+    message = str(exc_info.value).lower()
+    assert "network" in message or "timeout" in message
+
+
+# ---------------------------------------------------------------------------
+# Test 15 – get_trending: status 403 → GitHubAPIError z "rate limit"
+# ---------------------------------------------------------------------------
+async def test_trending_403_raises_rate_limit():
+    mock_response = _make_error_response(403)
+
+    with _patch_client(mock_response):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_trending()
+
+    assert "rate limit" in str(exc_info.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# Test 16 – get_trending: błąd sieci → GitHubAPIError z "network" lub "timeout"
+# ---------------------------------------------------------------------------
+async def test_trending_network_error_raises_github_api_error():
+    with _make_network_error_client():
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_trending()
+
+    message = str(exc_info.value).lower()
+    assert "network" in message or "timeout" in message
+
+
+# ---------------------------------------------------------------------------
+# Test 17 (regresja) – get_repo_details(zły format) → ValueError, NIE GitHubAPIError
+# (już pokryty przez test_zly_format_repo_rzuca_valueerror, tutaj dodatkowe
+#  sprawdzenie że to nie jest GitHubAPIError)
+# ---------------------------------------------------------------------------
+async def test_zly_format_repo_nie_rzuca_github_api_error():
+    with pytest.raises(ValueError):
+        await get_repo_details("no-slash-format")
+
+    # upewnij się, że ValueError nie jest podklasą GitHubAPIError
+    assert not issubclass(ValueError, GitHubAPIError)

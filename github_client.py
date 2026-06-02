@@ -15,6 +15,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+class GitHubAPIError(Exception):
+    """Błąd komunikacji z GitHub API (czytelny komunikat dla użytkownika/agenta)."""
+
+
 async def get_trending(language: str | None = None, period: str = "daily") -> list[dict]:
     """Pobiera trendujące repozytoria z GitHub Search API.
 
@@ -33,6 +37,7 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
 
     Raises:
         ValueError: Jeśli `period` nie jest jednym z: daily, weekly, monthly.
+        GitHubAPIError: Jeśli wystąpi błąd komunikacji z GitHub API (sieć, rate limit, itp.).
     """
     period_days = {"daily": 1, "weekly": 7, "monthly": 30}
     if period not in period_days:
@@ -60,23 +65,37 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(url, params=params, headers=headers)
+            response.raise_for_status()
 
-        items = response.json().get("items", [])
+            items = response.json().get("items", [])
 
-        results = [
-            {
-                "name": item["full_name"],
-                "description": item.get("description") or "",
-                "stars": item.get("stargazers_count", 0),
-                "stars_today": None,
-                "language": item.get("language"),
-                "url": item["html_url"],
-            }
-            for item in items
-        ]
+            results = [
+                {
+                    "name": item["full_name"],
+                    "description": item.get("description") or "",
+                    "stars": item.get("stargazers_count", 0),
+                    "stars_today": None,
+                    "language": item.get("language"),
+                    "url": item["html_url"],
+                }
+                for item in items
+            ]
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status in (403, 429):
+            raise GitHubAPIError(
+                "GitHub API rate limit exceeded. Try again later or set a GITHUB_TOKEN."
+            ) from exc
+        raise GitHubAPIError(
+            f"GitHub API returned an error (HTTP {status})."
+        ) from exc
+    except httpx.RequestError as exc:
+        raise GitHubAPIError(
+            "Could not reach GitHub API (network error or timeout)."
+        ) from exc
 
     return results
 
@@ -94,6 +113,7 @@ async def get_repo_details(repo: str) -> dict:
 
     Raises:
         ValueError: Jeśli `repo` nie jest w formacie owner/name.
+        GitHubAPIError: Jeśli wystąpi błąd komunikacji z GitHub API (sieć, rate limit, itp.).
     """
     parts = repo.split("/")
     if len(parts) != 2 or not parts[0] or not parts[1]:
@@ -114,21 +134,37 @@ async def get_repo_details(repo: str) -> dict:
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(url, headers=headers)
-        response.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
 
-        data = response.json()
+            data = response.json()
 
-        result = {
-            "name": data["full_name"],
-            "description": data.get("description") or "",
-            "stars": data.get("stargazers_count", 0),
-            "forks": data.get("forks_count", 0),
-            "language": data.get("language"),
-            "topics": data.get("topics") or [],
-            "last_commit": data.get("pushed_at"),
-            "url": data["html_url"],
-        }
+            result = {
+                "name": data["full_name"],
+                "description": data.get("description") or "",
+                "stars": data.get("stargazers_count", 0),
+                "forks": data.get("forks_count", 0),
+                "language": data.get("language"),
+                "topics": data.get("topics") or [],
+                "last_commit": data.get("pushed_at"),
+                "url": data["html_url"],
+            }
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status in (403, 429):
+            raise GitHubAPIError(
+                "GitHub API rate limit exceeded. Try again later or set a GITHUB_TOKEN."
+            ) from exc
+        if status == 404:
+            raise GitHubAPIError(f"Repository '{repo}' not found.") from exc
+        raise GitHubAPIError(
+            f"GitHub API returned an error (HTTP {status})."
+        ) from exc
+    except httpx.RequestError as exc:
+        raise GitHubAPIError(
+            "Could not reach GitHub API (network error or timeout)."
+        ) from exc
 
     return result
