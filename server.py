@@ -31,7 +31,7 @@ mcp = FastMCP("github-trends-mcp")
 
 
 @mcp.tool()
-async def get_trending(language: str | None = None, period: str = "daily") -> list[dict]:
+async def get_trending(language: str | None = None, period: str = "daily", include_stars_today: bool = False) -> list[dict]:
     """Zwraca listę trendujących repozytoriów GitHub.
 
     Używa GitHub Search API do znalezienia repozytoriów z największą liczbą
@@ -43,19 +43,21 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
                   "javascript", "rust"). Gdy None — wszystkie języki.
         period: Okres wyszukiwania trendów: "daily" (ostatnia doba),
                 "weekly" (ostatni tydzień) lub "monthly" (ostatni miesiąc).
+        include_stars_today: Domyślnie False. Gdy True, pole stars_today bywa
+            uzupełniane danymi ze strony github.com/trending — najlepszy możliwy efekt.
 
     Returns:
         Lista słowników, każdy z kluczami:
         - name (str): pełna nazwa repo (właściciel/repo),
         - description (str): opis repo,
         - stars (int): całkowita liczba gwiazdek,
-        - stars_today (None): przyrost gwiazdek (obecnie niedostępny),
+        - stars_today (None | int): przyrost gwiazdek (None jeśli niepozyskany),
         - language (str | None): główny język repo,
         - url (str): link do repo na GitHubie.
     """
     logger.info('get_trending called (language=%s, period=%s)', language, period)
     try:
-        result = await github_client.get_trending(language=language, period=period)
+        result = await github_client.get_trending(language=language, period=period, include_stars_today=include_stars_today)
         logger.info('get_trending OK')
         return result
     except Exception as exc:

@@ -7,10 +7,12 @@ pola `stars_today`.
 """
 
 import os
+import re
 from datetime import datetime, timezone, timedelta
 
 import httpx
 from dotenv import load_dotenv
+from scrapling import Selector
 
 load_dotenv()
 
@@ -19,7 +21,60 @@ class GitHubAPIError(Exception):
     """Błąd komunikacji z GitHub API (czytelny komunikat dla użytkownika/agenta)."""
 
 
-async def get_trending(language: str | None = None, period: str = "daily") -> list[dict]:
+async def _fetch_stars_today(language: str | None = None, period: str = "daily") -> dict:
+    """Pobiera github.com/trending i zwraca mapę {repo (owner/name): stars_today (int)}.
+
+    Używa lekkiego, adaptacyjnego parsera Scraplinga (bez przeglądarki). Funkcja
+    pomocnicza wykorzystywana opcjonalnie przez get_trending do uzupełnienia
+    pola stars_today. Może rzucić wyjątek (sieć/parsowanie) — wołający (get_trending)
+    traktuje scraping jako najlepszy możliwy efekt i nie pozwala mu zepsuć wyniku.
+    """
+    base = "https://github.com/trending"
+    if language:
+        base = base + "/" + language.lower()
+    params = {"since": period}
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        resp = await client.get(base, params=params, headers=headers)
+        resp.raise_for_status()
+        html = resp.text
+
+    page = Selector(html, adaptive=True, url=base)
+    rows = page.css("article.Box-row", auto_save=True)
+    if not rows:
+        rows = page.css("article.Box-row", adaptive=True)
+    if not rows:
+        rows = page.css("article")
+
+    result: dict[str, int | None] = {}
+    for row in rows:
+        href = row.css("h2 a::attr(href)").extract_first()
+        if not href:
+            continue
+        full_name = str(href).strip().lstrip("/")
+
+        row_text = row.get_all_text() if hasattr(row, "get_all_text") else row.text
+        m = re.search(r"([\d,]+)\s+stars?\s+today", row_text)
+        stars_today = int(m.group(1).replace(",", "")) if m else None
+
+        result[full_name] = stars_today
+
+    return result
+
+
+async def get_trending(
+    language: str | None = None,
+    period: str = "daily",
+    include_stars_today: bool = False,
+) -> list[dict]:
     """Pobiera trendujące repozytoria z GitHub Search API.
 
     GitHub nie udostępnia oficjalnego endpointu /trending, więc używamy
@@ -29,11 +84,15 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
     Args:
         language: Język programowania do filtrowania (np. "python"). None = wszystkie.
         period: Okres wyszukiwania: "daily", "weekly" lub "monthly".
+        include_stars_today: Domyślnie False. Gdy True, próbuje uzupełnić stars_today
+            danymi ze strony github.com/trending metodą najlepszego dopasowania
+            — tylko dla repo obecnych również na tej stronie; awaria scrapingu
+            nie wpływa na resztę wyniku.
 
     Returns:
         Lista słowników z kluczami: name, description, stars, stars_today,
-        language, url. Pole stars_today ma zawsze wartość None (do uzupełnienia
-        w osobnym zadaniu przez scraping).
+        language, url. Pole stars_today ma zawsze wartość None, chyba że
+        include_stars_today=True i scraping zakończy się powodzeniem.
 
     Raises:
         ValueError: Jeśli `period` nie jest jednym z: daily, weekly, monthly.
@@ -96,6 +155,15 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
         raise GitHubAPIError(
             "Could not reach GitHub API (network error or timeout)."
         ) from exc
+
+    if include_stars_today:
+        try:
+            stars_map = await _fetch_stars_today(language=language, period=period)
+            for item in results:
+                if item["name"] in stars_map and stars_map[item["name"]] is not None:
+                    item["stars_today"] = stars_map[item["name"]]
+        except Exception:
+            pass
 
     return results
 

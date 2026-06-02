@@ -10,7 +10,7 @@ import pytest
 
 import httpx
 
-from github_client import get_trending, get_repo_details, GitHubAPIError
+from github_client import get_trending, get_repo_details, GitHubAPIError, _fetch_stars_today
 
 
 def _make_fake_item(
@@ -374,3 +374,119 @@ async def test_zly_format_repo_nie_rzuca_github_api_error():
 
     # upewnij się, że ValueError nie jest podklasą GitHubAPIError
     assert not issubclass(ValueError, GitHubAPIError)
+
+
+# ===========================================================================
+# Testy offline dla _fetch_stars_today i enrichmentu stars_today (TASK-009)
+# ===========================================================================
+
+# Minimalny, zamrożony HTML imitujący stronę github.com/trending.
+# Trzy artykuły:
+#   repo-a: 1,266 stars today  (liczba z przecinkiem)
+#   repo-b: 1 star today       (forma pojedyncza)
+#   repo-c: brak wzmianki o gwiazdkach → None
+_FAKE_TRENDING_HTML = """
+<!DOCTYPE html>
+<html>
+<body>
+  <article class="Box-row">
+    <h2><a href="/owner/repo-a">owner / repo-a</a></h2>
+    <span>1,266 stars today</span>
+  </article>
+  <article class="Box-row">
+    <h2><a href="/owner/repo-b">owner / repo-b</a></h2>
+    <span>1 star today</span>
+  </article>
+  <article class="Box-row">
+    <h2><a href="/owner/repo-c">owner / repo-c</a></h2>
+    <span>No star information here.</span>
+  </article>
+</body>
+</html>
+"""
+
+
+def _patch_stars_client(html: str):
+    """Podmienia httpx.AsyncClient tak, by zwracał odpowiedź z podanym HTML."""
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.text = html
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    return patch("github_client.httpx.AsyncClient", return_value=mock_client)
+
+
+# ---------------------------------------------------------------------------
+# Test 18 – _fetch_stars_today parsuje liczby poprawnie (offline HTML)
+# ---------------------------------------------------------------------------
+async def test_fetch_stars_today_parsuje_liczby():
+    with _patch_stars_client(_FAKE_TRENDING_HTML):
+        result = await _fetch_stars_today()
+
+    # repo-a: 1,266 → 1266 (int, przecinek usunięty)
+    assert result.get("owner/repo-a") == 1266
+    # repo-b: 1 star (forma pojedyncza) → 1
+    assert result.get("owner/repo-b") == 1
+    # repo-c: brak tekstu o gwiazdkach → None
+    assert result.get("owner/repo-c") is None
+
+
+# ---------------------------------------------------------------------------
+# Test 19 – enrichment: get_trending z include_stars_today=True uzupełnia pole
+# ---------------------------------------------------------------------------
+async def test_get_trending_include_stars_today_dopasowanie(monkeypatch):
+    items = [
+        _make_fake_item(full_name="owner/repo-a"),
+        _make_fake_item(full_name="owner/repo-z"),  # nie ma w mapie stars
+    ]
+    mock_response = _make_mock_response(items)
+
+    fake_stars_map = {"owner/repo-a": 100}
+    mock_fetch = AsyncMock(return_value=fake_stars_map)
+    monkeypatch.setattr("github_client._fetch_stars_today", mock_fetch)
+
+    with _patch_client(mock_response):
+        result = await get_trending(include_stars_today=True)
+
+    repo_a = next(r for r in result if r["name"] == "owner/repo-a")
+    repo_z = next(r for r in result if r["name"] == "owner/repo-z")
+
+    assert repo_a["stars_today"] == 100
+    assert repo_z["stars_today"] is None
+
+
+# ---------------------------------------------------------------------------
+# Test 20 – odporność: wyjątek _fetch_stars_today nie psuje get_trending
+# ---------------------------------------------------------------------------
+async def test_get_trending_scraping_exception_nie_psuje_wyniku(monkeypatch):
+    items = [_make_fake_item(full_name="owner/repo-x")]
+    mock_response = _make_mock_response(items)
+
+    mock_fetch = AsyncMock(side_effect=RuntimeError("scraping failed"))
+    monkeypatch.setattr("github_client._fetch_stars_today", mock_fetch)
+
+    with _patch_client(mock_response):
+        result = await get_trending(include_stars_today=True)
+
+    assert len(result) == 1
+    assert result[0]["stars_today"] is None
+
+
+# ---------------------------------------------------------------------------
+# Test 21 – domyślne include_stars_today=False → _fetch_stars_today nie wywołana
+# ---------------------------------------------------------------------------
+async def test_get_trending_domyslnie_nie_wywoluje_fetch_stars(monkeypatch):
+    items = [_make_fake_item(full_name="owner/repo-y")]
+    mock_response = _make_mock_response(items)
+
+    mock_fetch = AsyncMock()
+    monkeypatch.setattr("github_client._fetch_stars_today", mock_fetch)
+
+    with _patch_client(mock_response):
+        result = await get_trending()  # include_stars_today=False (domyślnie)
+
+    mock_fetch.assert_not_called()
+    assert result[0]["stars_today"] is None
