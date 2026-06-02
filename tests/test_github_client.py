@@ -490,3 +490,61 @@ async def test_get_trending_domyslnie_nie_wywoluje_fetch_stars(monkeypatch):
 
     mock_fetch.assert_not_called()
     assert result[0]["stars_today"] is None
+
+
+# ===========================================================================
+# Testy autoryzacji Bearer token (TASK-010)
+# ===========================================================================
+
+
+async def test_get_trending_dodaje_authorization_bearer_gdy_token_ustawiony(monkeypatch):
+    """GITHUB_TOKEN → nagłówek Authorization w formacie Bearer."""
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token-123")
+    items = [_make_fake_item()]
+    mock_response = _make_mock_response(items)
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        await get_trending()
+
+    mock_client.get.assert_called_once()
+    _, kwargs = mock_client.get.call_args
+    assert kwargs["headers"].get("Authorization") == "Bearer test-token-123"
+
+
+async def test_get_repo_details_dodaje_authorization_bearer_gdy_token_ustawiony(monkeypatch):
+    """GITHUB_TOKEN → nagłówek Authorization w formacie Bearer dla get_repo_details."""
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token-456")
+    data = _make_fake_repo_data()
+    mock_response = _make_mock_repo_response(data)
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        await get_repo_details("owner/repo")
+
+    mock_client.get.assert_called_once()
+    _, kwargs = mock_client.get.call_args
+    assert kwargs["headers"].get("Authorization") == "Bearer test-token-456"
+
+
+# ===========================================================================
+# Testy obsługi HTTP 500 dla get_trending (TASK-010)
+# ===========================================================================
+
+
+async def test_trending_500_raises_http_error():
+    mock_response = _make_error_response(500)
+
+    with _patch_client(mock_response):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_trending()
+
+    assert "500" in str(exc_info.value)

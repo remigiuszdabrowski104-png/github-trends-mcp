@@ -134,3 +134,55 @@ async def test_get_trending_blad_loguje_error_i_reraise(caplog, monkeypatch):
     assert any("get_trending" in m and "failed" in m for m in error_messages), (
         f"Brak rekordu 'get_trending failed' wśród błędów: {error_messages}"
     )
+
+
+# ---------------------------------------------------------------------------
+# TASK-010 – Test 5: get_repo_details sukces → logi "called" i "OK"
+# ---------------------------------------------------------------------------
+async def test_get_repo_details_sukces_loguje_called_i_ok(caplog, monkeypatch):
+    monkeypatch.setattr(
+        server.github_client,
+        "get_repo_details",
+        AsyncMock(return_value={"name": "owner/repo", "stars": 10}),
+    )
+
+    _attach_caplog(caplog)
+    try:
+        result = await server.get_repo_details("owner/repo")
+    finally:
+        _detach_caplog(caplog)
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("get_repo_details" in m and "called" in m for m in messages), (
+        f"Brak rekordu 'get_repo_details called' w logach: {messages}"
+    )
+    assert any("get_repo_details" in m and "OK" in m for m in messages), (
+        f"Brak rekordu 'get_repo_details OK' w logach: {messages}"
+    )
+    assert result["name"] == "owner/repo"
+    assert result["stars"] == 10
+
+
+# ---------------------------------------------------------------------------
+# TASK-010 – Test 6: track_repo błąd → log ERROR + re-raise
+# ---------------------------------------------------------------------------
+async def test_track_repo_blad_loguje_error_i_reraise(caplog, monkeypatch):
+    monkeypatch.setattr(
+        server.github_client,
+        "get_repo_details",
+        AsyncMock(side_effect=server.github_client.GitHubAPIError("boom")),
+    )
+
+    _attach_caplog(caplog)
+    try:
+        with pytest.raises(server.github_client.GitHubAPIError):
+            await server.track_repo("owner/repo")
+    finally:
+        _detach_caplog(caplog)
+
+    error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert error_records, f"Brak rekordu ERROR w logach: {[r.getMessage() for r in caplog.records]}"
+    error_messages = [r.getMessage() for r in error_records]
+    assert any("track_repo" in m and "failed" in m for m in error_messages), (
+        f"Brak rekordu 'track_repo failed' wśród błędów: {error_messages}"
+    )

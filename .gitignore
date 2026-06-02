@@ -19,3 +19,4 @@ tracked_repos.json
 # Logs
 mcp_server.log
 *.log
+.coverage

@@ -178,3 +178,26 @@ def test_track_repo_dwa_wywolania_aktualizuja_plik_atomowo(tmp_path, monkeypatch
 
     tmp_files = list(tmp_path.glob("*.tmp"))
     assert tmp_files == [], f"Nie powinno być plików .tmp po track_repo, znaleziono: {tmp_files}"
+
+
+# ---------------------------------------------------------------------------
+# TASK-010 – Test 12: load_tracked → pusty słownik gdy plik istnieje ale jest pusty
+# ---------------------------------------------------------------------------
+def test_load_tracked_pusty_plik_zwraca_pusty_slownik(tmp_path, monkeypatch):
+    fake_file = tmp_path / "tracked_repos.json"
+    fake_file.write_text("", encoding="utf-8")
+    monkeypatch.setattr(tracker, "TRACKED_FILE", fake_file)
+
+    result = tracker.load_tracked()
+
+    assert result == {}
+
+
+def test_load_tracked_biale_znaki_zwraca_pusty_slownik(tmp_path, monkeypatch):
+    fake_file = tmp_path / "tracked_repos.json"
+    fake_file.write_text("   \n\t  \n  ", encoding="utf-8")
+    monkeypatch.setattr(tracker, "TRACKED_FILE", fake_file)
+
+    result = tracker.load_tracked()
+
+    assert result == {}
