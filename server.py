@@ -8,6 +8,24 @@ from mcp.server.fastmcp import FastMCP
 
 import github_client
 import tracker
+import logging
+from pathlib import Path
+
+LOG_FILE = Path(__file__).parent / "mcp_server.log"
+
+logger = logging.getLogger("github-trends-mcp")
+logger.setLevel(logging.INFO)
+logger.propagate = False  # logi NIE ida do root loggera (ochrona kanalu stdio)
+if not logger.handlers:
+    _handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    _handler.setFormatter(
+        logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    )
+    logger.addHandler(_handler)
+
+# Wyciszenie gadatliwych logow bibliotek HTTP (zeby nie zasmiecaly kanalu stdio)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 mcp = FastMCP("github-trends-mcp")
 
@@ -35,7 +53,14 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
         - language (str | None): główny język repo,
         - url (str): link do repo na GitHubie.
     """
-    return await github_client.get_trending(language=language, period=period)
+    logger.info('get_trending called (language=%s, period=%s)', language, period)
+    try:
+        result = await github_client.get_trending(language=language, period=period)
+        logger.info('get_trending OK')
+        return result
+    except Exception as exc:
+        logger.error('get_trending failed: %s', exc)
+        raise
 
 
 @mcp.tool()
@@ -59,7 +84,14 @@ async def get_repo_details(repo: str) -> dict:
         - last_commit (str): data ostatniego commitu,
         - url (str): link do repo na GitHubie.
     """
-    return await github_client.get_repo_details(repo)
+    logger.info('get_repo_details called (repo=%s)', repo)
+    try:
+        result = await github_client.get_repo_details(repo)
+        logger.info('get_repo_details OK')
+        return result
+    except Exception as exc:
+        logger.error('get_repo_details failed: %s', exc)
+        raise
 
 
 @mcp.tool()
@@ -79,10 +111,16 @@ async def track_repo(repo: str) -> dict:
         - delta (int | None): przyrost gwiazdek od ostatniego sprawdzenia.
           None oznacza pierwsze śledzenie tego repo (brak wcześniejszego pomiaru).
     """
-    details = await github_client.get_repo_details(repo)
-    stars = details["stars"]
-    delta = tracker.track_repo(repo, stars)
-    return {"repo": repo, "stars": stars, "delta": delta}
+    logger.info('track_repo called (repo=%s)', repo)
+    try:
+        details = await github_client.get_repo_details(repo)
+        stars = details["stars"]
+        delta = tracker.track_repo(repo, stars)
+        logger.info('track_repo OK')
+        return {"repo": repo, "stars": stars, "delta": delta}
+    except Exception as exc:
+        logger.error('track_repo failed: %s', exc)
+        raise
 
 
 if __name__ == "__main__":
