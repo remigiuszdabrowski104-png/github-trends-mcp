@@ -7,6 +7,7 @@ komunikujący się ze światem zewnętrznym przez standardowe wejście/wyjście.
 from mcp.server.fastmcp import FastMCP
 
 import github_client
+import tracker
 
 mcp = FastMCP("github-trends-mcp")
 
@@ -35,6 +36,53 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
         - url (str): link do repo na GitHubie.
     """
     return await github_client.get_trending(language=language, period=period)
+
+
+@mcp.tool()
+async def get_repo_details(repo: str) -> dict:
+    """Zwraca szczegóły repozytorium GitHub.
+
+    Pobiera podstawowe informacje o repozytorium na podstawie jego nazwy
+    w formacie właściciel/repo.
+
+    Args:
+        repo: Nazwa repozytorium w formacie "owner/name" (np. "microsoft/vscode").
+
+    Returns:
+        Słownik z kluczami:
+        - name (str): pełna nazwa repo (właściciel/repo),
+        - description (str): opis repo,
+        - stars (int): całkowita liczba gwiazdek,
+        - forks (int): liczba forków,
+        - language (str | None): główny język repo,
+        - topics (list[str]): lista tematów repo,
+        - last_commit (str): data ostatniego commitu,
+        - url (str): link do repo na GitHubie.
+    """
+    return await github_client.get_repo_details(repo)
+
+
+@mcp.tool()
+async def track_repo(repo: str) -> dict:
+    """Rozpoczyna lub aktualizuje śledzenie repozytorium GitHub.
+
+    Pobiera aktualną liczbę gwiazdek dla podanego repozytorium i zapisuje stan,
+    obliczając przyrost gwiazdek od ostatniego sprawdzenia.
+
+    Args:
+        repo: Nazwa repozytorium w formacie "owner/name" (np. "microsoft/vscode").
+
+    Returns:
+        Słownik z kluczami:
+        - repo (str): nazwa śledzonego repozytorium,
+        - stars (int): aktualna liczba gwiazdek,
+        - delta (int | None): przyrost gwiazdek od ostatniego sprawdzenia.
+          None oznacza pierwsze śledzenie tego repo (brak wcześniejszego pomiaru).
+    """
+    details = await github_client.get_repo_details(repo)
+    stars = details["stars"]
+    delta = tracker.track_repo(repo, stars)
+    return {"repo": repo, "stars": stars, "delta": delta}
 
 
 if __name__ == "__main__":
