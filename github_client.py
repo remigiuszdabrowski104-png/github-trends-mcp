@@ -79,3 +79,56 @@ async def get_trending(language: str | None = None, period: str = "daily") -> li
         ]
 
     return results
+
+
+async def get_repo_details(repo: str) -> dict:
+    """Pobiera szczegółowe informacje o repozytorium GitHub.
+
+    Args:
+        repo: Nazwa repozytorium w formacie owner/name (np. modelcontextprotocol/python-sdk).
+
+    Returns:
+        Słownik z kluczami: name, description, stars, forks, language, topics,
+        last_commit, url. Pole last_commit to data ostatniego pushu (pushed_at)
+        do dowolnej gałęzi, nie dokładny czas ostatniego commitu do gałęzi domyślnej.
+
+    Raises:
+        ValueError: Jeśli `repo` nie jest w formacie owner/name.
+    """
+    parts = repo.split("/")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError(
+            f"Nieprawidłowy format repo '{repo}'. Oczekiwano: owner/name."
+        )
+
+    owner, name = parts
+    url = f"https://api.github.com/repos/{owner}/{name}"
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "github-trends-mcp",
+    }
+
+    token = os.getenv("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
+
+        data = response.json()
+
+        result = {
+            "name": data["full_name"],
+            "description": data.get("description") or "",
+            "stars": data.get("stargazers_count", 0),
+            "forks": data.get("forks_count", 0),
+            "language": data.get("language"),
+            "topics": data.get("topics") or [],
+            "last_commit": data.get("pushed_at"),
+            "url": data["html_url"],
+        }
+
+    return result
