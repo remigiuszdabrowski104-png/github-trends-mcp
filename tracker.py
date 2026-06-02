@@ -6,6 +6,7 @@ pomiędzy kolejnymi migawkami.
 """
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,7 +18,8 @@ def load_tracked() -> dict:
 
     Returns:
         Słownik z danymi śledzonych repozytoriów lub pusty słownik {},
-        gdy plik nie istnieje, jest pusty lub zawiera nieprawidłowy JSON.
+        gdy plik nie istnieje, jest pusty, zawiera nieprawidłowy JSON,
+        został zapisany w złym kodowaniu lub nie można go odczytać.
     """
     if not TRACKED_FILE.exists():
         return {}
@@ -26,20 +28,27 @@ def load_tracked() -> dict:
         if not text.strip():
             return {}
         return json.loads(text)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
         return {}
 
 
 def save_tracked(data: dict) -> None:
-    """Zapisuje słownik `data` do pliku TRACKED_FILE jako sformatowany JSON.
+    """Zapisuje słownik `data` do pliku TRACKED_FILE atomowo przez plik tymczasowy.
+
+    Zapis odbywa się najpierw do pliku tymczasowego obok docelowego,
+    a następnie plik tymczasowy jest atomowo podmieniany na docelowy
+    za pomocą os.replace(). Dzięki temu przerwanie procesu w trakcie
+    zapisu nie uszkodzi pliku docelowego.
 
     Args:
         data: Słownik ze śledzonymi repozytoriami do zapisania.
     """
-    TRACKED_FILE.write_text(
+    tmp_file = TRACKED_FILE.with_suffix(".json.tmp")
+    tmp_file.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    os.replace(tmp_file, TRACKED_FILE)
 
 
 def track_repo(repo: str, stars: int) -> int | None:
