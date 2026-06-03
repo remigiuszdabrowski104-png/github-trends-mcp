@@ -126,4 +126,15 @@ async def track_repo(repo: str) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    import os
+    transport = os.getenv("MCP_TRANSPORT", "stdio")
+    if transport == "http":
+        mcp.settings.host = os.getenv("MCP_HOST", "127.0.0.1")
+        _port_raw = os.getenv("MCP_PORT", "8001")
+        try:
+            mcp.settings.port = int(_port_raw)
+        except ValueError:
+            mcp.settings.port = 8001
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run()
