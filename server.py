@@ -135,6 +135,18 @@ if __name__ == "__main__":
             mcp.settings.port = int(_port_raw)
         except ValueError:
             mcp.settings.port = 8001
+        _allowed_hosts_raw = os.getenv("MCP_ALLOWED_HOSTS")
+        if _allowed_hosts_raw:
+            _hosts = [h.strip() for h in _allowed_hosts_raw.split(",") if h.strip()]
+            _origins = []
+            for h in _hosts:
+                _origins.append(f"https://{h}")
+                _origins.append(f"http://{h}")
+            from mcp.server.transport_security import TransportSecuritySettings
+            mcp.settings.transport_security = TransportSecuritySettings(
+                allowed_hosts=_hosts,
+                allowed_origins=_origins,
+            )
         mcp.run(transport="streamable-http")
     else:
         mcp.run()
