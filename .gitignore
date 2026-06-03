@@ -20,3 +20,4 @@ tracked_repos.json
 mcp_server.log
 *.log
 .coverage
+PROJECT_PLAN.md
