@@ -6,16 +6,21 @@ Instead of asking an agent "what's trending on GitHub right now?" and getting a 
 
 ## Features
 
-- **`get_trending`** — list trending repositories, optionally filtered by language and time period.
+- **`get_trending`** — list trending repositories via the official GitHub Search API (newly created repos ranked by stars), optionally filtered by language and time period.
+- **`get_trending_page`** — list the repositories shown on the real `github.com/trending` page (by daily/weekly/monthly star gains), via lightweight web scraping.
 - **`get_repo_details`** — fetch details for a specific repository (stars, forks, language, topics, last push).
 - **`track_repo`** — record a repository's star count locally and report the change (delta) since the last check.
 - Graceful error handling (rate limits, missing repos, network failures) — readable messages instead of crashes.
 - File logging to `mcp_server.log`.
-- Optional, opt-in `stars_today` enrichment via a lightweight HTML parser.
 
 ## How trending data is sourced
 
-GitHub's REST API has **no official `/trending` endpoint**. This server uses the official **GitHub Search API** (`/search/repositories?sort=stars&order=desc` with a `created:` date filter) as its reliable foundation. The `stars_today` field is an **optional, best-effort** extra, parsed from `github.com/trending` only when explicitly requested (see [The `stars_today` field](#the-stars_today-field)).
+GitHub's REST API has **no official `/trending` endpoint**, so this server offers two complementary tools — and the distinction matters:
+
+- **`get_trending`** uses the official **GitHub Search API** (`/search/repositories?sort=stars&order=desc` with a `created:` date filter). It is **reliable and stable** (an official API that won't break), but it lists *recently created* repositories ranked by total stars — so it surfaces promising young projects, which naturally have smaller star counts. Think "new and rising."
+- **`get_trending_page`** scrapes the actual **`github.com/trending`** page, returning exactly what you see there (established repos ranked by their star gain *today / this week / this month*). It matches the familiar Trending page, but because it relies on scraping, it is **best-effort** — if GitHub changes the page layout, the parser may need an update.
+
+In short: use `get_trending_page` for "what's hot right now" (matches the website), and `get_trending` for "what new projects are gaining traction" (official API, rock-solid). The optional `stars_today` enrichment on `get_trending` is also parsed from `github.com/trending` (best-effort).
 
 ## Requirements
 
@@ -103,6 +108,17 @@ List trending repositories.
 | `include_stars_today` | `bool` | `False` | When `True`, attempts to fill `stars_today` from `github.com/trending` (best-effort). |
 
 Returns a list of objects: `name`, `description`, `stars`, `stars_today` (`None` if not retrieved), `language`, `url`.
+
+### `get_trending_page`
+
+List the repositories from the real `github.com/trending` page (best-effort web scraping).
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `language` | `str` (optional) | `None` | Programming language filter, e.g. `"python"`, `"rust"`. `None` = all languages. |
+| `period` | `str` | `"daily"` | Time window: `"daily"`, `"weekly"`, or `"monthly"`. |
+
+Returns a list of objects: `name`, `url`, `description`, `language`, `stars_period` (star gain in the selected period), `stars_total` (total stars). Any field may be `None`/`""` if absent on the page. If the page can't be parsed, returns an empty list rather than failing.
 
 ### `get_repo_details`
 
