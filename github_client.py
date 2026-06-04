@@ -168,6 +168,134 @@ async def get_trending(
     return results
 
 
+async def get_trending_page(
+    language: str | None = None,
+    period: str = "daily",
+) -> list[dict]:
+    """Fetches trending repositories from the real github.com/trending page (web scraping).
+
+    Unlike get_trending (which uses GitHub Search API), this function scrapes
+    the actual github.com/trending page using Scrapling, returning best-effort
+    data for each repository row.
+
+    Args:
+        language: Programming language filter (e.g. "python"). None = all languages.
+        period: Trending period: "daily", "weekly" or "monthly".
+
+    Returns:
+        List of dicts with keys: name, url, description, language,
+        stars_period, stars_total. Missing fields default to None or "".
+
+    Raises:
+        ValueError: If `period` is not one of: daily, weekly, monthly.
+        GitHubAPIError: If a network/HTTP error occurs fetching the page.
+    """
+    valid_periods = {"daily", "weekly", "monthly"}
+    if period not in valid_periods:
+        raise ValueError(
+            f"Invalid period '{period}'. Expected one of: daily, weekly, monthly."
+        )
+
+    base = "https://github.com/trending"
+    if language:
+        base = base + "/" + language.lower()
+    params = {"since": period}
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(base, params=params, headers=headers)
+            resp.raise_for_status()
+            html = resp.text
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        raise GitHubAPIError(
+            f"Failed to fetch github.com/trending (HTTP {status})."
+        ) from exc
+    except httpx.RequestError as exc:
+        raise GitHubAPIError(
+            "Could not reach github.com/trending (network error or timeout)."
+        ) from exc
+
+    page = Selector(html, adaptive=True, url=base)
+    rows = page.css("article.Box-row", auto_save=True)
+    if not rows:
+        rows = page.css("article.Box-row", adaptive=True)
+    if not rows:
+        rows = page.css("article")
+
+    if not rows:
+        return []
+
+    results: list[dict] = []
+    for row in rows:
+        # --- name & url ---
+        href = row.css("h2 a::attr(href)").extract_first()
+        if not href:
+            continue
+        full_name = str(href).strip().lstrip("/")
+        repo_url = f"https://github.com/{full_name}"
+
+        # --- description ---
+        desc_el = row.css("p")
+        if desc_el:
+            if hasattr(desc_el[0], "get_all_text"):
+                description = desc_el[0].get_all_text().strip()
+            else:
+                description = (desc_el[0].text or "").strip()
+        else:
+            description = ""
+
+        # --- language ---
+        lang_el = row.css("[itemprop='programmingLanguage']")
+        if lang_el:
+            repo_language: str | None = lang_el[0].get_all_text().strip() if hasattr(lang_el[0], "get_all_text") else None
+            if not repo_language:
+                repo_language = None
+        else:
+            repo_language = None
+
+        # --- stars_period: "N stars today" / "N stars this week" / "N stars this month" ---
+        row_text = row.get_all_text() if hasattr(row, "get_all_text") else ""
+        m_period = re.search(
+            r"([\d,]+)\s+stars?\s+(?:today|this\s+week|this\s+month)",
+            row_text,
+            re.IGNORECASE,
+        )
+        stars_period: int | None = (
+            int(m_period.group(1).replace(",", "")) if m_period else None
+        )
+
+        # --- stars_total: link to /stargazers contains the count ---
+        stars_total: int | None = None
+        stargazer_links = row.css("a[href$='/stargazers']")
+        if stargazer_links:
+            link_text = stargazer_links[0].get_all_text().strip() if hasattr(stargazer_links[0], "get_all_text") else ""
+            m_total = re.search(r"([\d,]+)", link_text)
+            if m_total:
+                stars_total = int(m_total.group(1).replace(",", ""))
+
+        results.append(
+            {
+                "name": full_name,
+                "url": repo_url,
+                "description": description,
+                "language": repo_language,
+                "stars_period": stars_period,
+                "stars_total": stars_total,
+            }
+        )
+
+    return results
+
+
 async def get_repo_details(repo: str) -> dict:
     """Pobiera szczegółowe informacje o repozytorium GitHub.
 

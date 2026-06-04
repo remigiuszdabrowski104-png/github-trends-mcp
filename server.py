@@ -66,6 +66,39 @@ async def get_trending(language: str | None = None, period: str = "daily", inclu
 
 
 @mcp.tool()
+async def get_trending_page(language: str | None = None, period: str = "daily") -> list[dict]:
+    """Zwraca listę trendujących repozytoriów ze strony github.com/trending (scraping).
+
+    Dane pochodzą z prawdziwej strony github.com/trending (nie z Search API)
+    i są pobierane metodą scrapingu — charakter best-effort (pola mogą być None
+    jeśli strona nie zawiera danej informacji lub zmienił się układ HTML).
+
+    Args:
+        language: Opcjonalny język programowania do filtrowania (np. "python",
+                  "javascript", "rust"). Gdy None — wszystkie języki.
+        period: Okres trendów: "daily" (dziś), "weekly" (ten tydzień)
+                lub "monthly" (ten miesiąc).
+
+    Returns:
+        Lista słowników, każdy z kluczami:
+        - name (str): pełna nazwa repo (właściciel/repo),
+        - url (str): link do repo na GitHubie,
+        - description (str): opis repo (pusty string jeśli brak),
+        - language (str | None): język programowania repo (None jeśli brak),
+        - stars_period (int | None): liczba gwiazdek w danym okresie (None jeśli brak),
+        - stars_total (int | None): całkowita liczba gwiazdek (None jeśli brak).
+    """
+    logger.info('get_trending_page called (language=%s, period=%s)', language, period)
+    try:
+        result = await github_client.get_trending_page(language=language, period=period)
+        logger.info('get_trending_page OK')
+        return result
+    except Exception as exc:
+        logger.error('get_trending_page failed: %s', exc)
+        raise
+
+
+@mcp.tool()
 async def get_repo_details(repo: str) -> dict:
     """Zwraca szczegóły repozytorium GitHub.
 

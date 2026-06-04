@@ -10,7 +10,7 @@ import pytest
 
 import httpx
 
-from github_client import get_trending, get_repo_details, GitHubAPIError, _fetch_stars_today
+from github_client import get_trending, get_repo_details, GitHubAPIError, _fetch_stars_today, get_trending_page
 
 
 def _make_fake_item(
@@ -548,3 +548,179 @@ async def test_trending_500_raises_http_error():
             await get_trending()
 
     assert "500" in str(exc_info.value)
+
+
+# ===========================================================================
+# Testy dla get_trending_page (TASK-017)
+# ===========================================================================
+
+# Minimalny HTML imitujący stronę github.com/trending z 3 wierszami.
+# repo-x: Python, 500 stars today, 12,345 total
+# repo-y: Rust,  3,200 stars this week, brak total
+# repo-z: brak języka, brak gwiazdek
+_FAKE_TRENDING_PAGE_HTML = """
+<!DOCTYPE html>
+<html>
+<body>
+  <article class="Box-row">
+    <h2><a href="/alice/repo-x">alice / repo-x</a></h2>
+    <p>A great Python library for data science.</p>
+    <span itemprop="programmingLanguage">Python</span>
+    <a href="/alice/repo-x/stargazers">12,345</a>
+    <span>500 stars today</span>
+  </article>
+  <article class="Box-row">
+    <h2><a href="/bob/repo-y">bob / repo-y</a></h2>
+    <p>Fast systems programming.</p>
+    <span itemprop="programmingLanguage">Rust</span>
+    <span>3,200 stars this week</span>
+  </article>
+  <article class="Box-row">
+    <h2><a href="/carol/repo-z">carol / repo-z</a></h2>
+    <p>No language, no stars.</p>
+  </article>
+</body>
+</html>
+"""
+
+# HTML bez żadnych artykułów article.Box-row
+_FAKE_EMPTY_HTML = """
+<!DOCTYPE html>
+<html>
+<body>
+  <p>No trending repositories found.</p>
+</body>
+</html>
+"""
+
+
+def _patch_trending_page_client(html: str):
+    """Podmienia httpx.AsyncClient tak, by zwracał odpowiedź z podanym HTML."""
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.text = html
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    return patch("github_client.httpx.AsyncClient", return_value=mock_client)
+
+
+# ---------------------------------------------------------------------------
+# Test 24 – get_trending_page parsuje wiersze poprawnie (offline HTML)
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_parsuje_wiersze():
+    with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
+        result = await get_trending_page()
+
+    assert len(result) == 3
+
+    repo_x = next(r for r in result if r["name"] == "alice/repo-x")
+    assert repo_x["url"] == "https://github.com/alice/repo-x"
+    assert "Python" in (repo_x["description"] or repo_x["language"] or "")
+    assert repo_x["language"] == "Python"
+    assert repo_x["stars_period"] == 500
+
+    repo_y = next(r for r in result if r["name"] == "bob/repo-y")
+    assert repo_y["stars_period"] == 3200
+    assert repo_y["language"] == "Rust"
+
+    repo_z = next(r for r in result if r["name"] == "carol/repo-z")
+    assert repo_z["stars_period"] is None
+    assert repo_z["language"] is None
+
+
+# ---------------------------------------------------------------------------
+# Test 25 – każdy element ma wymagane klucze
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_pola_wynikowe():
+    with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
+        result = await get_trending_page()
+
+    required_keys = {"name", "url", "description", "language", "stars_period", "stars_total"}
+    for item in result:
+        assert required_keys.issubset(item.keys()), f"Brakujące klucze w: {item}"
+
+
+# ---------------------------------------------------------------------------
+# Test 26 – zły period → ValueError (PRZED wywołaniem sieci)
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_zly_period_rzuca_valueerror():
+    with pytest.raises(ValueError):
+        await get_trending_page(period="roczny")
+
+
+# ---------------------------------------------------------------------------
+# Test 27 – błąd sieci → GitHubAPIError
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_blad_sieci_rzuca_github_api_error():
+    request = httpx.Request("GET", "https://github.com/trending")
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(
+        side_effect=httpx.RequestError("connection refused", request=request)
+    )
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_trending_page()
+
+    message = str(exc_info.value).lower()
+    assert "network" in message or "timeout" in message or "trending" in message
+
+
+# ---------------------------------------------------------------------------
+# Test 28 – gdy parser nie znajdzie wierszy → zwraca [] (nie wyjątek)
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_brak_wierszy_zwraca_pusta_liste():
+    with _patch_trending_page_client(_FAKE_EMPTY_HTML):
+        result = await get_trending_page()
+
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Test 29 – walidacja period odbywa się PRZED wywołaniem sieci
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_walidacja_period_przed_siecią():
+    """ValueError musi być rzucony bez żadnego zapytania sieciowego."""
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        with pytest.raises(ValueError):
+            await get_trending_page(period="invalid")
+
+    mock_client.get.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test 30 – błąd HTTP (np. 503) → GitHubAPIError z kodem statusu
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_blad_http_rzuca_github_api_error():
+    request = httpx.Request("GET", "https://github.com/trending")
+    real_response = httpx.Response(503, request=request)
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError(
+            "HTTP error 503",
+            request=request,
+            response=real_response,
+        )
+    )
+    mock_response.text = ""
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        with pytest.raises(GitHubAPIError) as exc_info:
+            await get_trending_page()
+
+    assert "503" in str(exc_info.value)
