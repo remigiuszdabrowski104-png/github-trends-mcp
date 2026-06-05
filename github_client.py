@@ -74,7 +74,7 @@ async def get_trending(
     language: str | None = None,
     period: str = "daily",
     include_stars_today: bool = False,
-) -> list[dict]:
+) -> dict:
     """Pobiera trendujące repozytoria z GitHub Search API.
 
     GitHub nie udostępnia oficjalnego endpointu /trending, więc używamy
@@ -90,9 +90,14 @@ async def get_trending(
             nie wpływa na resztę wyniku.
 
     Returns:
-        Lista słowników z kluczami: name, description, stars, stars_today,
-        language, url. Pole stars_today ma zawsze wartość None, chyba że
-        include_stars_today=True i scraping zakończy się powodzeniem.
+        Słownik z kluczami provenance + lista repozytoriów:
+        - source_url (str): surowy URL Search API użyty do pobrania danych,
+        - verify_url (str): adres wyszukiwarki GitHub dla człowieka odtwarzający ten sam filtr,
+        - fetched_at (str): znacznik czasu pobrania w formacie ISO8601 UTC,
+        - count (int): liczba zwróconych repozytoriów,
+        - repos (list[dict]): lista słowników z kluczami: name, description, stars,
+          stars_today, language, url. Pole stars_today ma zawsze wartość None, chyba że
+          include_stars_today=True i scraping zakończy się powodzeniem.
 
     Raises:
         ValueError: Jeśli `period` nie jest jednym z: daily, weekly, monthly.
@@ -123,6 +128,17 @@ async def get_trending(
     token = os.getenv("GITHUB_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
+
+    # Build provenance URLs from the exact same parameters used for the request
+    import urllib.parse
+    source_url = url + "?" + urllib.parse.urlencode(params)
+
+    verify_q = f"created:>={date_str}"
+    if language:
+        verify_q += f"+language:{language}"
+    verify_url = f"https://github.com/search?q={verify_q}&type=repositories&s=stars&o=desc"
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -165,13 +181,19 @@ async def get_trending(
         except Exception:
             pass
 
-    return results
+    return {
+        "source_url": source_url,
+        "verify_url": verify_url,
+        "fetched_at": fetched_at,
+        "count": len(results),
+        "repos": results,
+    }
 
 
 async def get_trending_page(
     language: str | None = None,
     period: str = "daily",
-) -> list[dict]:
+) -> dict:
     """Fetches trending repositories from the real github.com/trending page (web scraping).
 
     Unlike get_trending (which uses GitHub Search API), this function scrapes
@@ -183,8 +205,13 @@ async def get_trending_page(
         period: Trending period: "daily", "weekly" or "monthly".
 
     Returns:
-        List of dicts with keys: name, url, description, language,
-        stars_period, stars_total. Missing fields default to None or "".
+        Dict with provenance metadata and repository list:
+        - source_url (str): actual URL of the trending page that was fetched,
+        - verify_url (str): same as source_url (already a human-readable page),
+        - fetched_at (str): fetch timestamp in ISO8601 UTC format,
+        - count (int): number of repositories returned,
+        - repos (list[dict]): list of dicts with keys: name, url, description, language,
+          stars_period, stars_total. Missing fields default to None or "".
 
     Raises:
         ValueError: If `period` is not one of: daily, weekly, monthly.
@@ -200,6 +227,13 @@ async def get_trending_page(
     if language:
         base = base + "/" + language.lower()
     params = {"since": period}
+
+    # Build provenance URLs from the exact same parameters used for the request
+    import urllib.parse
+    source_url = base + "?" + urllib.parse.urlencode(params)
+    verify_url = source_url  # github.com/trending is already a human-readable page
+
+    fetched_at = datetime.now(timezone.utc).isoformat()
 
     headers = {
         "User-Agent": (
@@ -232,7 +266,13 @@ async def get_trending_page(
         rows = page.css("article")
 
     if not rows:
-        return []
+        return {
+            "source_url": source_url,
+            "verify_url": verify_url,
+            "fetched_at": fetched_at,
+            "count": 0,
+            "repos": [],
+        }
 
     results: list[dict] = []
     for row in rows:
@@ -293,7 +333,13 @@ async def get_trending_page(
             }
         )
 
-    return results
+    return {
+        "source_url": source_url,
+        "verify_url": verify_url,
+        "fetched_at": fetched_at,
+        "count": len(results),
+        "repos": results,
+    }
 
 
 async def get_repo_details(repo: str) -> dict:

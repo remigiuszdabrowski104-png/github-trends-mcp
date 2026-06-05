@@ -57,7 +57,7 @@ async def test_zwraca_min_5_repo():
     with _patch_client(mock_response):
         result = await get_trending()
 
-    assert len(result) >= 5
+    assert len(result["repos"]) >= 5
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ async def test_poprawne_mapowanie_pol():
     with _patch_client(mock_response):
         result = await get_trending()
 
-    first = result[0]
+    first = result["repos"][0]
     assert first["name"] == "octocat/Hello-World"
     assert first["stars"] == 42
     assert first["url"] == "https://github.com/octocat/Hello-World"
@@ -91,7 +91,7 @@ async def test_description_none_daje_pusty_string():
     with _patch_client(mock_response):
         result = await get_trending()
 
-    assert result[0]["description"] == ""
+    assert result["repos"][0]["description"] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -451,8 +451,9 @@ async def test_get_trending_include_stars_today_dopasowanie(monkeypatch):
     with _patch_client(mock_response):
         result = await get_trending(include_stars_today=True)
 
-    repo_a = next(r for r in result if r["name"] == "owner/repo-a")
-    repo_z = next(r for r in result if r["name"] == "owner/repo-z")
+    repos = result["repos"]
+    repo_a = next(r for r in repos if r["name"] == "owner/repo-a")
+    repo_z = next(r for r in repos if r["name"] == "owner/repo-z")
 
     assert repo_a["stars_today"] == 100
     assert repo_z["stars_today"] is None
@@ -471,8 +472,9 @@ async def test_get_trending_scraping_exception_nie_psuje_wyniku(monkeypatch):
     with _patch_client(mock_response):
         result = await get_trending(include_stars_today=True)
 
-    assert len(result) == 1
-    assert result[0]["stars_today"] is None
+    repos = result["repos"]
+    assert len(repos) == 1
+    assert repos[0]["stars_today"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -489,7 +491,125 @@ async def test_get_trending_domyslnie_nie_wywoluje_fetch_stars(monkeypatch):
         result = await get_trending()  # include_stars_today=False (domyślnie)
 
     mock_fetch.assert_not_called()
-    assert result[0]["stars_today"] is None
+    assert result["repos"][0]["stars_today"] is None
+
+
+# ===========================================================================
+# Testy kształtu koperty provenance (TASK-018)
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test P1 – get_trending: odpowiedź ma wymagane klucze koperty
+# ---------------------------------------------------------------------------
+async def test_get_trending_provenance_keys():
+    items = [_make_fake_item(full_name=f"owner/repo{i}") for i in range(3)]
+    mock_response = _make_mock_response(items)
+
+    with _patch_client(mock_response):
+        result = await get_trending()
+
+    assert "source_url" in result
+    assert "verify_url" in result
+    assert "fetched_at" in result
+    assert "count" in result
+    assert "repos" in result
+
+
+# ---------------------------------------------------------------------------
+# Test P2 – get_trending: count == len(repos)
+# ---------------------------------------------------------------------------
+async def test_get_trending_count_equals_repos_len():
+    items = [_make_fake_item(full_name=f"owner/repo{i}") for i in range(5)]
+    mock_response = _make_mock_response(items)
+
+    with _patch_client(mock_response):
+        result = await get_trending()
+
+    assert result["count"] == len(result["repos"])
+
+
+# ---------------------------------------------------------------------------
+# Test P3 – get_trending: verify_url zaczyna się od https://github.com/search
+# ---------------------------------------------------------------------------
+async def test_get_trending_verify_url_starts_with_github_search():
+    items = [_make_fake_item()]
+    mock_response = _make_mock_response(items)
+
+    with _patch_client(mock_response):
+        result = await get_trending()
+
+    assert result["verify_url"].startswith("https://github.com/search")
+
+
+# ---------------------------------------------------------------------------
+# Test P4 – get_trending z language=python: verify_url zawiera "python"
+# ---------------------------------------------------------------------------
+async def test_get_trending_verify_url_contains_language():
+    items = [_make_fake_item()]
+    mock_response = _make_mock_response(items)
+
+    with _patch_client(mock_response):
+        result = await get_trending(language="python")
+
+    assert "python" in result["verify_url"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Test P5 – get_trending: source_url zaczyna się od https://api.github.com/search
+# ---------------------------------------------------------------------------
+async def test_get_trending_source_url_starts_with_api():
+    items = [_make_fake_item()]
+    mock_response = _make_mock_response(items)
+
+    with _patch_client(mock_response):
+        result = await get_trending()
+
+    assert result["source_url"].startswith("https://api.github.com/search/repositories")
+
+
+# ---------------------------------------------------------------------------
+# Test P6 – get_trending_page: odpowiedź ma wymagane klucze koperty
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_provenance_keys():
+    with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
+        result = await get_trending_page()
+
+    assert "source_url" in result
+    assert "verify_url" in result
+    assert "fetched_at" in result
+    assert "count" in result
+    assert "repos" in result
+
+
+# ---------------------------------------------------------------------------
+# Test P7 – get_trending_page: count == len(repos)
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_count_equals_repos_len():
+    with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
+        result = await get_trending_page()
+
+    assert result["count"] == len(result["repos"])
+
+
+# ---------------------------------------------------------------------------
+# Test P8 – get_trending_page: verify_url zaczyna się od https://github.com/trending
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_verify_url_starts_with_trending():
+    with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
+        result = await get_trending_page()
+
+    assert result["verify_url"].startswith("https://github.com/trending")
+
+
+# ---------------------------------------------------------------------------
+# Test P9 – get_trending_page: source_url zaczyna się od https://github.com/trending
+# ---------------------------------------------------------------------------
+async def test_get_trending_page_source_url_starts_with_trending():
+    with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
+        result = await get_trending_page()
+
+    assert result["source_url"].startswith("https://github.com/trending")
 
 
 # ===========================================================================
@@ -614,19 +734,20 @@ async def test_get_trending_page_parsuje_wiersze():
     with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
         result = await get_trending_page()
 
-    assert len(result) == 3
+    repos = result["repos"]
+    assert len(repos) == 3
 
-    repo_x = next(r for r in result if r["name"] == "alice/repo-x")
+    repo_x = next(r for r in repos if r["name"] == "alice/repo-x")
     assert repo_x["url"] == "https://github.com/alice/repo-x"
     assert "Python" in (repo_x["description"] or repo_x["language"] or "")
     assert repo_x["language"] == "Python"
     assert repo_x["stars_period"] == 500
 
-    repo_y = next(r for r in result if r["name"] == "bob/repo-y")
+    repo_y = next(r for r in repos if r["name"] == "bob/repo-y")
     assert repo_y["stars_period"] == 3200
     assert repo_y["language"] == "Rust"
 
-    repo_z = next(r for r in result if r["name"] == "carol/repo-z")
+    repo_z = next(r for r in repos if r["name"] == "carol/repo-z")
     assert repo_z["stars_period"] is None
     assert repo_z["language"] is None
 
@@ -639,7 +760,7 @@ async def test_get_trending_page_pola_wynikowe():
         result = await get_trending_page()
 
     required_keys = {"name", "url", "description", "language", "stars_period", "stars_total"}
-    for item in result:
+    for item in result["repos"]:
         assert required_keys.issubset(item.keys()), f"Brakujące klucze w: {item}"
 
 
@@ -672,13 +793,14 @@ async def test_get_trending_page_blad_sieci_rzuca_github_api_error():
 
 
 # ---------------------------------------------------------------------------
-# Test 28 – gdy parser nie znajdzie wierszy → zwraca [] (nie wyjątek)
+# Test 28 – gdy parser nie znajdzie wierszy → repos jest [] (nie wyjątek)
 # ---------------------------------------------------------------------------
 async def test_get_trending_page_brak_wierszy_zwraca_pusta_liste():
     with _patch_trending_page_client(_FAKE_EMPTY_HTML):
         result = await get_trending_page()
 
-    assert result == []
+    assert result["repos"] == []
+    assert result["count"] == 0
 
 
 # ---------------------------------------------------------------------------

@@ -31,8 +31,8 @@ mcp = FastMCP("github-trends-mcp")
 
 
 @mcp.tool()
-async def get_trending(language: str | None = None, period: str = "daily", include_stars_today: bool = False) -> list[dict]:
-    """Zwraca listę trendujących repozytoriów GitHub.
+async def get_trending(language: str | None = None, period: str = "daily", include_stars_today: bool = False) -> dict:
+    """Zwraca listę trendujących repozytoriów GitHub wraz z metadanymi provenance.
 
     Używa GitHub Search API do znalezienia repozytoriów z największą liczbą
     gwiazdek w zadanym okresie, opcjonalnie filtrując po języku programowania.
@@ -47,13 +47,15 @@ async def get_trending(language: str | None = None, period: str = "daily", inclu
             uzupełniane danymi ze strony github.com/trending — najlepszy możliwy efekt.
 
     Returns:
-        Lista słowników, każdy z kluczami:
-        - name (str): pełna nazwa repo (właściciel/repo),
-        - description (str): opis repo,
-        - stars (int): całkowita liczba gwiazdek,
-        - stars_today (None | int): przyrost gwiazdek (None jeśli niepozyskany),
-        - language (str | None): główny język repo,
-        - url (str): link do repo na GitHubie.
+        Słownik z metadanymi provenance oraz listą repozytoriów:
+        - source_url (str): surowy URL Search API użyty do pobrania danych,
+        - verify_url (str): klikalny link do wyszukiwarki GitHub odtwarzający ten sam filtr,
+        - fetched_at (str): znacznik czasu pobrania w formacie ISO8601 UTC,
+        - count (int): liczba zwróconych repozytoriów,
+        - repos (list[dict]): lista repozytoriów, każda z kluczami:
+          name, description, stars, stars_today, language, url.
+        Przy prezentacji wyników podaj użytkownikowi źródło (source_url / verify_url)
+        i czas pobrania (fetched_at).
     """
     logger.info('get_trending called (language=%s, period=%s)', language, period)
     try:
@@ -66,7 +68,7 @@ async def get_trending(language: str | None = None, period: str = "daily", inclu
 
 
 @mcp.tool()
-async def get_trending_page(language: str | None = None, period: str = "daily") -> list[dict]:
+async def get_trending_page(language: str | None = None, period: str = "daily") -> dict:
     """Zwraca listę trendujących repozytoriów ze strony github.com/trending (scraping).
 
     Dane pochodzą z prawdziwej strony github.com/trending (nie z Search API)
@@ -80,13 +82,15 @@ async def get_trending_page(language: str | None = None, period: str = "daily") 
                 lub "monthly" (ten miesiąc).
 
     Returns:
-        Lista słowników, każdy z kluczami:
-        - name (str): pełna nazwa repo (właściciel/repo),
-        - url (str): link do repo na GitHubie,
-        - description (str): opis repo (pusty string jeśli brak),
-        - language (str | None): język programowania repo (None jeśli brak),
-        - stars_period (int | None): liczba gwiazdek w danym okresie (None jeśli brak),
-        - stars_total (int | None): całkowita liczba gwiazdek (None jeśli brak).
+        Słownik z metadanymi provenance oraz listą repozytoriów:
+        - source_url (str): faktyczny URL strony trending, który był pobierany,
+        - verify_url (str): klikalny link do tej samej strony (identyczny z source_url),
+        - fetched_at (str): znacznik czasu pobrania w formacie ISO8601 UTC,
+        - count (int): liczba zwróconych repozytoriów,
+        - repos (list[dict]): lista repozytoriów, każda z kluczami:
+          name, url, description, language, stars_period, stars_total.
+        Przy prezentacji wyników podaj użytkownikowi źródło (source_url / verify_url)
+        i czas pobrania (fetched_at).
     """
     logger.info('get_trending_page called (language=%s, period=%s)', language, period)
     try:
