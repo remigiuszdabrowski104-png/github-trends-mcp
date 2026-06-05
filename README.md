@@ -6,10 +6,11 @@ Instead of asking an agent "what's trending on GitHub right now?" and getting a 
 
 ## Features
 
-- **`get_trending`** — list trending repositories via the official GitHub Search API (newly created repos ranked by stars), optionally filtered by language and time period.
+- **`get_trending`** — list trending repositories via the official GitHub Search API (newly created repos ranked by stars), optionally filtered by language and time period, with a selectable result ranking (the `sort` parameter).
 - **`get_trending_page`** — list the repositories shown on the real `github.com/trending` page (by daily/weekly/monthly star gains), via lightweight web scraping.
 - **`get_repo_details`** — fetch details for a specific repository (stars, forks, language, topics, last push).
 - **`track_repo`** — record a repository's star count locally and report the change (delta) since the last check.
+- **Built-in provenance** — every trending response carries `source_url`, `verify_url`, `fetched_at`, and `count`, so the data can be traced and checked at its source instead of taken on trust.
 - Graceful error handling (rate limits, missing repos, network failures) — readable messages instead of crashes.
 - File logging to `mcp_server.log`.
 
@@ -21,6 +22,8 @@ GitHub's REST API has **no official `/trending` endpoint**, so this server offer
 - **`get_trending_page`** scrapes the actual **`github.com/trending`** page, returning exactly what you see there (established repos ranked by their star gain *today / this week / this month*). It matches the familiar Trending page, but because it relies on scraping, it is **best-effort** — if GitHub changes the page layout, the parser may need an update.
 
 In short: use `get_trending_page` for "what's hot right now" (matches the website), and `get_trending` for "what new projects are gaining traction" (official API, rock-solid). The optional `stars_today` enrichment on `get_trending` is also parsed from `github.com/trending` (best-effort).
+
+**Verifiable by design.** Both trending tools wrap their results in a small *provenance envelope*: `source_url` (the exact address the data was fetched from), `verify_url` (a link you can open to check the list yourself), `fetched_at` (an ISO-8601 UTC timestamp), `count`, and `repos` (the list itself). For `get_trending_page` the `verify_url` opens the exact Trending page that was scraped; for `get_trending` it opens a GitHub search that reproduces the same `created:` filter and the chosen ranking. This keeps the promise of *real data, not hallucination* — every answer can point back to where it came from.
 
 ## Requirements
 
@@ -79,7 +82,7 @@ Add the server to your Claude Desktop configuration file:
 }
 ```
 
-Replace `ABSOLUTE_PATH_TO/github-trends-mcp` with the full path to this project (on Windows, e.g. `C:\\Users\\you\\dev\\github-trends-mcp` — note the doubled backslashes in JSON). Restart Claude Desktop; the three tools will appear.
+Replace `ABSOLUTE_PATH_TO/github-trends-mcp` with the full path to this project (on Windows, e.g. `C:\\Users\\you\\dev\\github-trends-mcp` — note the doubled backslashes in JSON). Restart Claude Desktop; the four tools will appear.
 
 ### Cursor
 
@@ -99,15 +102,16 @@ This opens a local web UI where you can call each tool and inspect the responses
 
 ### `get_trending`
 
-List trending repositories.
+List trending repositories (GitHub Search API).
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `language` | `str` (optional) | `None` | Programming language filter, e.g. `"python"`, `"rust"`. `None` = all languages. |
 | `period` | `str` | `"daily"` | Time window: `"daily"`, `"weekly"`, or `"monthly"`. |
 | `include_stars_today` | `bool` | `False` | When `True`, attempts to fill `stars_today` from `github.com/trending` (best-effort). |
+| `sort` | `str` | `"most-stars"` | Result ranking. One of: `"most-stars"`, `"fewest-stars"`, `"most-forks"`, `"fewest-forks"`, `"recently-updated"`, `"least-recently-updated"`, `"best-match"`. |
 
-Returns a list of objects: `name`, `description`, `stars`, `stars_today` (`None` if not retrieved), `language`, `url`.
+Returns a **provenance envelope** (a dict): `source_url`, `verify_url`, `fetched_at` (ISO-8601 UTC), `count`, and `repos` — a list of objects, each with `name`, `description`, `stars`, `stars_today` (`None` if not retrieved), `language`, `url`. The `verify_url` reflects the chosen `sort` (for `"best-match"` it carries no sort parameters).
 
 ### `get_trending_page`
 
@@ -118,7 +122,7 @@ List the repositories from the real `github.com/trending` page (best-effort web 
 | `language` | `str` (optional) | `None` | Programming language filter, e.g. `"python"`, `"rust"`. `None` = all languages. |
 | `period` | `str` | `"daily"` | Time window: `"daily"`, `"weekly"`, or `"monthly"`. |
 
-Returns a list of objects: `name`, `url`, `description`, `language`, `stars_period` (star gain in the selected period), `stars_total` (total stars). Any field may be `None`/`""` if absent on the page. If the page can't be parsed, returns an empty list rather than failing.
+Returns a **provenance envelope** (a dict): `source_url`, `verify_url`, `fetched_at` (ISO-8601 UTC), `count`, and `repos` — a list of objects, each with `name`, `url`, `description`, `language`, `stars_period` (star gain in the selected period), `stars_total` (total stars). Any repo field may be `None`/`""` if absent on the page. If the page can't be parsed, `repos` is empty and `count` is `0` rather than failing.
 
 ### `get_repo_details`
 
@@ -170,13 +174,13 @@ The `.env` file is git-ignored and never committed.
 uv run pytest
 ```
 
-The suite covers all three tools, error handling, the tracker, and logging.
+The suite covers all four tools, error handling, the tracker, and logging.
 
 ## Project structure
 
 ```
 github-trends-mcp/
-├── server.py             # FastMCP server — registers the 3 MCP tools (stdio transport)
+├── server.py             # FastMCP server — registers the 4 MCP tools (stdio transport)
 ├── github_client.py      # GitHub API calls, error handling, stars_today parser
 ├── tracker.py            # Local star tracking (tracked_repos.json) + delta calculation
 ├── tests/                # pytest suite (mocked HTTP, no live calls)
