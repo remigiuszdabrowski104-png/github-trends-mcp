@@ -846,3 +846,91 @@ async def test_get_trending_page_blad_http_rzuca_github_api_error():
             await get_trending_page()
 
     assert "503" in str(exc_info.value)
+
+
+# ===========================================================================
+# Testy parametru sort (TASK-019)
+# ===========================================================================
+
+
+async def test_sort_domyslny_daje_stars_desc():
+    """Bez podania sort: params API mają sort=stars i order=desc, verify_url ma s=stars i o=desc."""
+    items = [_make_fake_item()]
+    mock_response = _make_mock_response(items)
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        result = await get_trending()
+
+    _, kwargs = mock_client.get.call_args
+    assert kwargs["params"]["sort"] == "stars"
+    assert kwargs["params"]["order"] == "desc"
+    assert "s=stars" in result["verify_url"]
+    assert "o=desc" in result["verify_url"]
+
+
+@pytest.mark.parametrize("sort_value, expected_api_sort, expected_api_order, expected_s, expected_o", [
+    ("fewest-stars", "stars", "asc", "stars", "asc"),
+    ("most-forks", "forks", "desc", "forks", "desc"),
+    ("fewest-forks", "forks", "asc", "forks", "asc"),
+    ("recently-updated", "updated", "desc", "updated", "desc"),
+    ("least-recently-updated", "updated", "asc", "updated", "asc"),
+])
+async def test_sort_wartosci_mapuja_params_i_verify_url(
+    sort_value, expected_api_sort, expected_api_order, expected_s, expected_o
+):
+    """Każda wartość sort (poza best-match) mapuje poprawnie params API i verify_url."""
+    items = [_make_fake_item()]
+    mock_response = _make_mock_response(items)
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        result = await get_trending(sort=sort_value)
+
+    _, kwargs = mock_client.get.call_args
+    assert kwargs["params"]["sort"] == expected_api_sort
+    assert kwargs["params"]["order"] == expected_api_order
+    assert f"s={expected_s}" in result["verify_url"]
+    assert f"o={expected_o}" in result["verify_url"]
+
+
+async def test_sort_best_match_bez_sort_order():
+    """best-match: params API NIE zawierają sort/order, verify_url NIE zawiera s= ani o=."""
+    items = [_make_fake_item()]
+    mock_response = _make_mock_response(items)
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        result = await get_trending(sort="best-match")
+
+    _, kwargs = mock_client.get.call_args
+    assert "sort" not in kwargs["params"]
+    assert "order" not in kwargs["params"]
+    assert "&s=" not in result["verify_url"]
+    assert "&o=" not in result["verify_url"]
+
+
+async def test_sort_invalid_rzuca_valueerror_bez_sieci():
+    """Nieprawidłowa wartość sort rzuca ValueError przed wykonaniem zapytania sieciowego."""
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("github_client.httpx.AsyncClient", return_value=mock_client):
+        with pytest.raises(ValueError):
+            await get_trending(sort="abc")
+
+    mock_client.get.assert_not_called()

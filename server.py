@@ -31,7 +31,7 @@ mcp = FastMCP("github-trends-mcp")
 
 
 @mcp.tool()
-async def get_trending(language: str | None = None, period: str = "daily", include_stars_today: bool = False) -> dict:
+async def get_trending(language: str | None = None, period: str = "daily", include_stars_today: bool = False, sort: str = "most-stars") -> dict:
     """Zwraca listę trendujących repozytoriów GitHub wraz z metadanymi provenance.
 
     Używa GitHub Search API do znalezienia repozytoriów z największą liczbą
@@ -45,6 +45,10 @@ async def get_trending(language: str | None = None, period: str = "daily", inclu
                 "weekly" (ostatni tydzień) lub "monthly" (ostatni miesiąc).
         include_stars_today: Domyślnie False. Gdy True, pole stars_today bywa
             uzupełniane danymi ze strony github.com/trending — najlepszy możliwy efekt.
+        sort: Sposób sortowania wyników (ranking). Domyślnie "most-stars".
+            Dozwolone wartości: "most-stars", "fewest-stars", "most-forks",
+            "fewest-forks", "recently-updated", "least-recently-updated",
+            "best-match".
 
     Returns:
         Słownik z metadanymi provenance oraz listą repozytoriów:
@@ -59,7 +63,7 @@ async def get_trending(language: str | None = None, period: str = "daily", inclu
     """
     logger.info('get_trending called (language=%s, period=%s)', language, period)
     try:
-        result = await github_client.get_trending(language=language, period=period, include_stars_today=include_stars_today)
+        result = await github_client.get_trending(language=language, period=period, include_stars_today=include_stars_today, sort=sort)
         logger.info('get_trending OK')
         return result
     except Exception as exc:

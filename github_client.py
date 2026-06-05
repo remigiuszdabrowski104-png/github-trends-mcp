@@ -8,6 +8,7 @@ pola `stars_today`.
 
 import os
 import re
+import urllib.parse
 from datetime import datetime, timezone, timedelta
 
 import httpx
@@ -74,6 +75,7 @@ async def get_trending(
     language: str | None = None,
     period: str = "daily",
     include_stars_today: bool = False,
+    sort: str = "most-stars",
 ) -> dict:
     """Pobiera trendujące repozytoria z GitHub Search API.
 
@@ -88,6 +90,10 @@ async def get_trending(
             danymi ze strony github.com/trending metodą najlepszego dopasowania
             — tylko dla repo obecnych również na tej stronie; awaria scrapingu
             nie wpływa na resztę wyniku.
+        sort: Sposób sortowania wyników (ranking). Domyślnie "most-stars".
+            Dozwolone wartości: "most-stars", "fewest-stars", "most-forks",
+            "fewest-forks", "recently-updated", "least-recently-updated",
+            "best-match".
 
     Returns:
         Słownik z kluczami provenance + lista repozytoriów:
@@ -100,13 +106,29 @@ async def get_trending(
           include_stars_today=True i scraping zakończy się powodzeniem.
 
     Raises:
-        ValueError: Jeśli `period` nie jest jednym z: daily, weekly, monthly.
+        ValueError: Jeśli `period` nie jest jednym z: daily, weekly, monthly,
+            lub jeśli `sort` nie jest jedną z dozwolonych wartości.
         GitHubAPIError: Jeśli wystąpi błąd komunikacji z GitHub API (sieć, rate limit, itp.).
     """
     period_days = {"daily": 1, "weekly": 7, "monthly": 30}
     if period not in period_days:
         raise ValueError(
             f"Nieprawidłowy okres '{period}'. Oczekiwano: daily, weekly, monthly."
+        )
+
+    sort_map = {
+        "most-stars": ("stars", "desc"),
+        "fewest-stars": ("stars", "asc"),
+        "most-forks": ("forks", "desc"),
+        "fewest-forks": ("forks", "asc"),
+        "recently-updated": ("updated", "desc"),
+        "least-recently-updated": ("updated", "asc"),
+        "best-match": (None, None),
+    }
+    if sort not in sort_map:
+        raise ValueError(
+            f"Invalid sort value '{sort}'. Expected one of: most-stars, fewest-stars, "
+            f"most-forks, fewest-forks, recently-updated, least-recently-updated, best-match."
         )
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days[period])
@@ -117,7 +139,11 @@ async def get_trending(
         q += f" language:{language}"
 
     url = "https://api.github.com/search/repositories"
-    params = {"q": q, "sort": "stars", "order": "desc", "per_page": 10}
+    api_sort, api_order = sort_map[sort]
+    params: dict = {"q": q, "per_page": 10}
+    if api_sort is not None:
+        params["sort"] = api_sort
+        params["order"] = api_order
 
     headers = {
         "Accept": "application/vnd.github+json",
@@ -130,13 +156,14 @@ async def get_trending(
         headers["Authorization"] = f"Bearer {token}"
 
     # Build provenance URLs from the exact same parameters used for the request
-    import urllib.parse
     source_url = url + "?" + urllib.parse.urlencode(params)
 
     verify_q = f"created:>={date_str}"
     if language:
         verify_q += f"+language:{language}"
-    verify_url = f"https://github.com/search?q={verify_q}&type=repositories&s=stars&o=desc"
+    verify_url = f"https://github.com/search?q={verify_q}&type=repositories"
+    if api_sort is not None:
+        verify_url += f"&s={api_sort}&o={api_order}"
 
     fetched_at = datetime.now(timezone.utc).isoformat()
 
@@ -229,7 +256,6 @@ async def get_trending_page(
     params = {"since": period}
 
     # Build provenance URLs from the exact same parameters used for the request
-    import urllib.parse
     source_url = base + "?" + urllib.parse.urlencode(params)
     verify_url = source_url  # github.com/trending is already a human-readable page
 
