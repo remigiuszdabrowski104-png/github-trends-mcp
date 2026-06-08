@@ -1,7 +1,7 @@
-"""Główny plik serwera FastMCP działającego po stdio.
+"""Main FastMCP server file running over stdio.
 
-Uruchamia serwer MCP (Model Context Protocol) oparty na FastMCP,
-komunikujący się ze światem zewnętrznym przez standardowe wejście/wyjście.
+Starts an MCP (Model Context Protocol) server based on FastMCP,
+communicating with the outside world via standard input/output.
 """
 
 from mcp.server.fastmcp import FastMCP
@@ -15,7 +15,7 @@ LOG_FILE = Path(__file__).parent / "mcp_server.log"
 
 logger = logging.getLogger("github-trends-mcp")
 logger.setLevel(logging.INFO)
-logger.propagate = False  # logi NIE ida do root loggera (ochrona kanalu stdio)
+logger.propagate = False  # logs do NOT go to the root logger (protects the stdio channel)
 if not logger.handlers:
     _handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
     _handler.setFormatter(
@@ -23,7 +23,7 @@ if not logger.handlers:
     )
     logger.addHandler(_handler)
 
-# Wyciszenie gadatliwych logow bibliotek HTTP (zeby nie zasmiecaly kanalu stdio)
+# Silence chatty HTTP library logs (so they don't pollute the stdio channel)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
@@ -32,34 +32,33 @@ mcp = FastMCP("github-trends-mcp")
 
 @mcp.tool()
 async def get_trending(language: str | None = None, period: str = "daily", include_stars_today: bool = False, sort: str = "most-stars") -> dict:
-    """Zwraca listę trendujących repozytoriów GitHub wraz z metadanymi provenance.
+    """Returns a list of trending GitHub repositories with provenance metadata.
 
-    Używa GitHub Search API do znalezienia repozytoriów z największą liczbą
-    gwiazdek w zadanym okresie, opcjonalnie filtrując po języku programowania.
-    Nie wymaga autoryzacji (token opcjonalny przez GITHUB_TOKEN w .env).
+    Uses the GitHub Search API to find repositories with the most stars in the
+    given period, optionally filtered by programming language. Requires no
+    authorization (token optional via GITHUB_TOKEN in .env).
 
     Args:
-        language: Opcjonalny język programowania do filtrowania (np. "python",
-                  "javascript", "rust"). Gdy None — wszystkie języki.
-        period: Okres wyszukiwania trendów: "daily" (ostatnia doba),
-                "weekly" (ostatni tydzień) lub "monthly" (ostatni miesiąc).
-        include_stars_today: Domyślnie False. Gdy True, pole stars_today bywa
-            uzupełniane danymi ze strony github.com/trending — najlepszy możliwy efekt.
-        sort: Sposób sortowania wyników (ranking). Domyślnie "most-stars".
-            Dozwolone wartości: "most-stars", "fewest-stars", "most-forks",
-            "fewest-forks", "recently-updated", "least-recently-updated",
-            "best-match".
+        language: Optional programming language filter (e.g. "python",
+                  "javascript", "rust"). When None — all languages.
+        period: Trend search period: "daily" (last 24h),
+                "weekly" (last week) or "monthly" (last month).
+        include_stars_today: Defaults to False. When True, the stars_today field
+            may be filled with data from github.com/trending — best-effort.
+        sort: Result ranking. Defaults to "most-stars". Allowed values:
+            "most-stars", "fewest-stars", "most-forks", "fewest-forks",
+            "recently-updated", "least-recently-updated", "best-match".
 
     Returns:
-        Słownik z metadanymi provenance oraz listą repozytoriów:
-        - source_url (str): surowy URL Search API użyty do pobrania danych,
-        - verify_url (str): klikalny link do wyszukiwarki GitHub odtwarzający ten sam filtr,
-        - fetched_at (str): znacznik czasu pobrania w formacie ISO8601 UTC,
-        - count (int): liczba zwróconych repozytoriów,
-        - repos (list[dict]): lista repozytoriów, każda z kluczami:
+        A dict with provenance metadata and a repository list:
+        - source_url (str): raw Search API URL used to fetch the data,
+        - verify_url (str): clickable GitHub search link reproducing the same filter,
+        - fetched_at (str): fetch timestamp in ISO8601 UTC format,
+        - count (int): number of repositories returned,
+        - repos (list[dict]): list of repositories, each with keys:
           name, description, stars, stars_today, language, url.
-        Przy prezentacji wyników podaj użytkownikowi źródło (source_url / verify_url)
-        i czas pobrania (fetched_at).
+        When presenting results, give the user the source (source_url / verify_url)
+        and the fetch time (fetched_at).
     """
     logger.info('get_trending called (language=%s, period=%s)', language, period)
     try:
@@ -73,28 +72,29 @@ async def get_trending(language: str | None = None, period: str = "daily", inclu
 
 @mcp.tool()
 async def get_trending_page(language: str | None = None, period: str = "daily") -> dict:
-    """Zwraca listę trendujących repozytoriów ze strony github.com/trending (scraping).
+    """Returns a list of trending repositories from the github.com/trending page (scraping).
 
-    Dane pochodzą z prawdziwej strony github.com/trending (nie z Search API)
-    i są pobierane metodą scrapingu — charakter best-effort (pola mogą być None
-    jeśli strona nie zawiera danej informacji lub zmienił się układ HTML).
+    The data comes from the real github.com/trending page (not the Search API)
+    and is obtained by scraping — best-effort in nature (fields may be None
+    if the page does not contain a given piece of information or the HTML
+    layout has changed).
 
     Args:
-        language: Opcjonalny język programowania do filtrowania (np. "python",
-                  "javascript", "rust"). Gdy None — wszystkie języki.
-        period: Okres trendów: "daily" (dziś), "weekly" (ten tydzień)
-                lub "monthly" (ten miesiąc).
+        language: Optional programming language filter (e.g. "python",
+                  "javascript", "rust"). When None — all languages.
+        period: Trend period: "daily" (today), "weekly" (this week)
+                or "monthly" (this month).
 
     Returns:
-        Słownik z metadanymi provenance oraz listą repozytoriów:
-        - source_url (str): faktyczny URL strony trending, który był pobierany,
-        - verify_url (str): klikalny link do tej samej strony (identyczny z source_url),
-        - fetched_at (str): znacznik czasu pobrania w formacie ISO8601 UTC,
-        - count (int): liczba zwróconych repozytoriów,
-        - repos (list[dict]): lista repozytoriów, każda z kluczami:
+        A dict with provenance metadata and a repository list:
+        - source_url (str): the actual trending page URL that was fetched,
+        - verify_url (str): clickable link to the same page (identical to source_url),
+        - fetched_at (str): fetch timestamp in ISO8601 UTC format,
+        - count (int): number of repositories returned,
+        - repos (list[dict]): list of repositories, each with keys:
           name, url, description, language, stars_period, stars_total.
-        Przy prezentacji wyników podaj użytkownikowi źródło (source_url / verify_url)
-        i czas pobrania (fetched_at).
+        When presenting results, give the user the source (source_url / verify_url)
+        and the fetch time (fetched_at).
     """
     logger.info('get_trending_page called (language=%s, period=%s)', language, period)
     try:
@@ -108,24 +108,24 @@ async def get_trending_page(language: str | None = None, period: str = "daily") 
 
 @mcp.tool()
 async def get_repo_details(repo: str) -> dict:
-    """Zwraca szczegóły repozytorium GitHub.
+    """Returns details of a GitHub repository.
 
-    Pobiera podstawowe informacje o repozytorium na podstawie jego nazwy
-    w formacie właściciel/repo.
+    Fetches basic information about a repository based on its name
+    in owner/repo format.
 
     Args:
-        repo: Nazwa repozytorium w formacie "owner/name" (np. "microsoft/vscode").
+        repo: Repository name in "owner/name" format (e.g. "microsoft/vscode").
 
     Returns:
-        Słownik z kluczami:
-        - name (str): pełna nazwa repo (właściciel/repo),
-        - description (str): opis repo,
-        - stars (int): całkowita liczba gwiazdek,
-        - forks (int): liczba forków,
-        - language (str | None): główny język repo,
-        - topics (list[str]): lista tematów repo,
-        - last_commit (str): data ostatniego commitu,
-        - url (str): link do repo na GitHubie.
+        A dict with keys:
+        - name (str): full repo name (owner/repo),
+        - description (str): repo description,
+        - stars (int): total star count,
+        - forks (int): fork count,
+        - language (str | None): main repo language,
+        - topics (list[str]): list of repo topics,
+        - last_commit (str): date of the last commit,
+        - url (str): link to the repo on GitHub.
     """
     logger.info('get_repo_details called (repo=%s)', repo)
     try:
@@ -139,20 +139,20 @@ async def get_repo_details(repo: str) -> dict:
 
 @mcp.tool()
 async def track_repo(repo: str) -> dict:
-    """Rozpoczyna lub aktualizuje śledzenie repozytorium GitHub.
+    """Starts or updates tracking of a GitHub repository.
 
-    Pobiera aktualną liczbę gwiazdek dla podanego repozytorium i zapisuje stan,
-    obliczając przyrost gwiazdek od ostatniego sprawdzenia.
+    Fetches the current star count for the given repository and saves the
+    state, computing the star increase since the last check.
 
     Args:
-        repo: Nazwa repozytorium w formacie "owner/name" (np. "microsoft/vscode").
+        repo: Repository name in "owner/name" format (e.g. "microsoft/vscode").
 
     Returns:
-        Słownik z kluczami:
-        - repo (str): nazwa śledzonego repozytorium,
-        - stars (int): aktualna liczba gwiazdek,
-        - delta (int | None): przyrost gwiazdek od ostatniego sprawdzenia.
-          None oznacza pierwsze śledzenie tego repo (brak wcześniejszego pomiaru).
+        A dict with keys:
+        - repo (str): name of the tracked repository,
+        - stars (int): current star count,
+        - delta (int | None): star increase since the last check.
+          None means the first time this repo is tracked (no prior measurement).
     """
     logger.info('track_repo called (repo=%s)', repo)
     try:
