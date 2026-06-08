@@ -1,1 +1,1 @@
-"""Testy dla github-trends-mcp."""
+"""Tests for github-trends-mcp."""

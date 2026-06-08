@@ -1,7 +1,6 @@
-"""Testy jednostkowe dla funkcji get_trending i get_repo_details z github_client.py.
+"""Unit tests for get_trending and get_repo_details from github_client.py.
 
-Wszystkie testy używają zamockowanego httpx.AsyncClient – żadnych
-prawdziwych zapytań sieciowych.
+All tests use a mocked httpx.AsyncClient — no real network requests.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,7 +19,7 @@ def _make_fake_item(
     language: str | None = "Python",
     html_url: str = "https://github.com/owner/repo",
 ) -> dict:
-    """Pomocnik tworzący słownik imitujący element z GitHub Search API."""
+    """Helper that builds a dict mimicking an item from the GitHub Search API."""
     return {
         "full_name": full_name,
         "description": description,
@@ -31,7 +30,7 @@ def _make_fake_item(
 
 
 def _make_mock_response(items: list[dict]) -> MagicMock:
-    """Zwraca zamockowany obiekt odpowiedzi HTTP z podanymi items."""
+    """Returns a mocked HTTP response object with the given items."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = {"items": items}
@@ -39,7 +38,7 @@ def _make_mock_response(items: list[dict]) -> MagicMock:
 
 
 def _patch_client(mock_response: MagicMock):
-    """Kontekst-manager: podmienia httpx.AsyncClient na mock zwracający mock_response."""
+    """Context manager: replaces httpx.AsyncClient with a mock returning mock_response."""
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_response)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -48,9 +47,9 @@ def _patch_client(mock_response: MagicMock):
 
 
 # ---------------------------------------------------------------------------
-# Test 1 – funkcja zwraca co najmniej 5 repozytoriów
+# Test 1 – the function returns at least 5 repositories
 # ---------------------------------------------------------------------------
-async def test_zwraca_min_5_repo():
+async def test_returns_at_least_5_repos():
     items = [_make_fake_item(full_name=f"owner/repo{i}") for i in range(7)]
     mock_response = _make_mock_response(items)
 
@@ -61,9 +60,9 @@ async def test_zwraca_min_5_repo():
 
 
 # ---------------------------------------------------------------------------
-# Test 2 – poprawne mapowanie pól
+# Test 2 – correct field mapping
 # ---------------------------------------------------------------------------
-async def test_poprawne_mapowanie_pol():
+async def test_correct_field_mapping():
     item = _make_fake_item(
         full_name="octocat/Hello-World",
         stargazers_count=42,
@@ -82,9 +81,9 @@ async def test_poprawne_mapowanie_pol():
 
 
 # ---------------------------------------------------------------------------
-# Test 3 – description=None w mocku daje pusty string w wyniku
+# Test 3 – description=None in the mock yields an empty string in the result
 # ---------------------------------------------------------------------------
-async def test_description_none_daje_pusty_string():
+async def test_description_none_yields_empty_string():
     item = _make_fake_item(description=None)
     mock_response = _make_mock_response([item])
 
@@ -95,9 +94,9 @@ async def test_description_none_daje_pusty_string():
 
 
 # ---------------------------------------------------------------------------
-# Test 4 – filtr języka trafia do parametru q
+# Test 4 – the language filter reaches the q parameter
 # ---------------------------------------------------------------------------
-async def test_filtr_jezyka_w_zapytaniu():
+async def test_language_filter_in_query():
     item = _make_fake_item()
     mock_response = _make_mock_response([item])
 
@@ -116,15 +115,15 @@ async def test_filtr_jezyka_w_zapytaniu():
 
 
 # ---------------------------------------------------------------------------
-# Test 5 – nieprawidłowy okres rzuca ValueError
+# Test 5 – an invalid period raises ValueError
 # ---------------------------------------------------------------------------
-async def test_niepoprawny_okres_rzuca_valueerror():
+async def test_invalid_period_raises_valueerror():
     with pytest.raises(ValueError):
-        await get_trending(period="rok")
+        await get_trending(period="year")
 
 
 # ===========================================================================
-# Testy dla get_repo_details
+# Tests for get_repo_details
 # ===========================================================================
 
 
@@ -138,7 +137,7 @@ def _make_fake_repo_data(
     pushed_at: str | None = "2026-01-15T12:00:00Z",
     html_url: str = "https://github.com/owner/repo",
 ) -> dict:
-    """Pomocnik tworzący słownik imitujący odpowiedź GitHub Repos API."""
+    """Helper that builds a dict mimicking a GitHub Repos API response."""
     data: dict = {
         "full_name": full_name,
         "description": description,
@@ -153,7 +152,7 @@ def _make_fake_repo_data(
 
 
 def _make_mock_repo_response(data: dict) -> MagicMock:
-    """Zwraca zamockowany obiekt odpowiedzi HTTP z podanym słownikiem repo."""
+    """Returns a mocked HTTP response object with the given repo dict."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = data
@@ -161,7 +160,7 @@ def _make_mock_repo_response(data: dict) -> MagicMock:
 
 
 def _patch_repo_client(mock_response: MagicMock):
-    """Kontekst-manager: podmienia httpx.AsyncClient na mock zwracający mock_response."""
+    """Context manager: replaces httpx.AsyncClient with a mock returning mock_response."""
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=mock_response)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -170,29 +169,29 @@ def _patch_repo_client(mock_response: MagicMock):
 
 
 # ---------------------------------------------------------------------------
-# Test 6 – ValueError dla złych formatów repo
+# Test 6 – ValueError for bad repo formats
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("bad_repo", [
-    "no-slash",          # brak slasha
-    "owner/",            # pusta nazwa
-    "/name",             # pusty owner
-    "a/b/c",             # za dużo części
-    "",                  # pusty string
-    "../x",              # proba path traversal
-    "x/..",              # proba path traversal
-    "owner/na me",       # niedozwolona spacja
-    "owner//name",       # podwojny slash
-    ".",                 # pojedyncza kropka
+    "no-slash",          # no slash
+    "owner/",            # empty name
+    "/name",             # empty owner
+    "a/b/c",             # too many parts
+    "",                  # empty string
+    "../x",              # path traversal attempt
+    "x/..",              # path traversal attempt
+    "owner/na me",       # disallowed space
+    "owner//name",       # double slash
+    ".",                 # single dot
 ])
-async def test_zly_format_repo_rzuca_valueerror(bad_repo):
+async def test_bad_repo_format_raises_valueerror(bad_repo):
     with pytest.raises(ValueError):
         await get_repo_details(bad_repo)
 
 
 # ---------------------------------------------------------------------------
-# Test 7 – poprawne mapowanie wszystkich 8 kluczy
+# Test 7 – correct mapping of all 8 keys
 # ---------------------------------------------------------------------------
-async def test_repo_details_poprawne_mapowanie_pol():
+async def test_repo_details_correct_field_mapping():
     data = _make_fake_repo_data(
         full_name="octocat/Hello-World",
         description="My first repository on GitHub!",
@@ -219,9 +218,9 @@ async def test_repo_details_poprawne_mapowanie_pol():
 
 
 # ---------------------------------------------------------------------------
-# Test 8 – description=None w odpowiedzi → pusty string w wyniku
+# Test 8 – description=None in the response → empty string in the result
 # ---------------------------------------------------------------------------
-async def test_repo_details_description_none_daje_pusty_string():
+async def test_repo_details_description_none_yields_empty_string():
     data = _make_fake_repo_data(description=None)
     mock_response = _make_mock_repo_response(data)
 
@@ -232,11 +231,11 @@ async def test_repo_details_description_none_daje_pusty_string():
 
 
 # ---------------------------------------------------------------------------
-# Test 9 – topics=None w odpowiedzi → pusta lista w wyniku
+# Test 9 – topics=None in the response → empty list in the result
 # ---------------------------------------------------------------------------
-async def test_repo_details_topics_none_daje_pusta_liste():
+async def test_repo_details_topics_none_yields_empty_list():
     data = _make_fake_repo_data()
-    data["topics"] = None  # jawnie ustawiamy null
+    data["topics"] = None  # explicitly set to null
     mock_response = _make_mock_repo_response(data)
 
     with _patch_repo_client(mock_response):
@@ -246,12 +245,12 @@ async def test_repo_details_topics_none_daje_pusta_liste():
 
 
 # ===========================================================================
-# Testy obsługi błędów GitHub API (TASK-007a)
+# GitHub API error-handling tests (TASK-007a)
 # ===========================================================================
 
 
 def _make_error_response(status_code: int) -> MagicMock:
-    """Zwraca zamockowany response, którego raise_for_status rzuca HTTPStatusError."""
+    """Returns a mocked response whose raise_for_status raises HTTPStatusError."""
     request = httpx.Request("GET", "https://api.github.com/test")
     real_response = httpx.Response(status_code, request=request)
     mock_response = MagicMock()
@@ -266,7 +265,7 @@ def _make_error_response(status_code: int) -> MagicMock:
 
 
 def _make_network_error_client():
-    """Zwraca patch zastępujący AsyncClient tak, by client.get rzucał RequestError."""
+    """Returns a patch replacing AsyncClient so that client.get raises RequestError."""
     request = httpx.Request("GET", "https://api.github.com/test")
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(
@@ -278,7 +277,7 @@ def _make_network_error_client():
 
 
 # ---------------------------------------------------------------------------
-# Test 10 – get_repo_details: status 404 → GitHubAPIError z "not found" i nazwą repo
+# Test 10 – get_repo_details: status 404 → GitHubAPIError with "not found" and repo name
 # ---------------------------------------------------------------------------
 async def test_repo_details_404_raises_not_found():
     mock_response = _make_error_response(404)
@@ -293,7 +292,7 @@ async def test_repo_details_404_raises_not_found():
 
 
 # ---------------------------------------------------------------------------
-# Test 11 – get_repo_details: status 403 → GitHubAPIError z "rate limit"
+# Test 11 – get_repo_details: status 403 → GitHubAPIError with "rate limit"
 # ---------------------------------------------------------------------------
 async def test_repo_details_403_raises_rate_limit():
     mock_response = _make_error_response(403)
@@ -306,7 +305,7 @@ async def test_repo_details_403_raises_rate_limit():
 
 
 # ---------------------------------------------------------------------------
-# Test 12 – get_repo_details: status 429 → GitHubAPIError z "rate limit"
+# Test 12 – get_repo_details: status 429 → GitHubAPIError with "rate limit"
 # ---------------------------------------------------------------------------
 async def test_repo_details_429_raises_rate_limit():
     mock_response = _make_error_response(429)
@@ -319,7 +318,7 @@ async def test_repo_details_429_raises_rate_limit():
 
 
 # ---------------------------------------------------------------------------
-# Test 13 – get_repo_details: status 500 → GitHubAPIError z "HTTP 500"
+# Test 13 – get_repo_details: status 500 → GitHubAPIError with "HTTP 500"
 # ---------------------------------------------------------------------------
 async def test_repo_details_500_raises_http_error():
     mock_response = _make_error_response(500)
@@ -332,7 +331,7 @@ async def test_repo_details_500_raises_http_error():
 
 
 # ---------------------------------------------------------------------------
-# Test 14 – get_repo_details: błąd sieci → GitHubAPIError z "network" lub "timeout"
+# Test 14 – get_repo_details: network error → GitHubAPIError with "network" or "timeout"
 # ---------------------------------------------------------------------------
 async def test_repo_details_network_error_raises_github_api_error():
     with _make_network_error_client():
@@ -344,7 +343,7 @@ async def test_repo_details_network_error_raises_github_api_error():
 
 
 # ---------------------------------------------------------------------------
-# Test 15 – get_trending: status 403 → GitHubAPIError z "rate limit"
+# Test 15 – get_trending: status 403 → GitHubAPIError with "rate limit"
 # ---------------------------------------------------------------------------
 async def test_trending_403_raises_rate_limit():
     mock_response = _make_error_response(403)
@@ -357,7 +356,7 @@ async def test_trending_403_raises_rate_limit():
 
 
 # ---------------------------------------------------------------------------
-# Test 16 – get_trending: błąd sieci → GitHubAPIError z "network" lub "timeout"
+# Test 16 – get_trending: network error → GitHubAPIError with "network" or "timeout"
 # ---------------------------------------------------------------------------
 async def test_trending_network_error_raises_github_api_error():
     with _make_network_error_client():
@@ -369,27 +368,27 @@ async def test_trending_network_error_raises_github_api_error():
 
 
 # ---------------------------------------------------------------------------
-# Test 17 (regresja) – get_repo_details(zły format) → ValueError, NIE GitHubAPIError
-# (już pokryty przez test_zly_format_repo_rzuca_valueerror, tutaj dodatkowe
-#  sprawdzenie że to nie jest GitHubAPIError)
+# Test 17 (regression) – get_repo_details(bad format) → ValueError, NOT GitHubAPIError
+# (already covered by test_bad_repo_format_raises_valueerror; here an extra
+#  check that it is not a GitHubAPIError)
 # ---------------------------------------------------------------------------
-async def test_zly_format_repo_nie_rzuca_github_api_error():
+async def test_bad_repo_format_does_not_raise_github_api_error():
     with pytest.raises(ValueError):
         await get_repo_details("no-slash-format")
 
-    # upewnij się, że ValueError nie jest podklasą GitHubAPIError
+    # make sure ValueError is not a subclass of GitHubAPIError
     assert not issubclass(ValueError, GitHubAPIError)
 
 
 # ===========================================================================
-# Testy offline dla _fetch_stars_today i enrichmentu stars_today (TASK-009)
+# Offline tests for _fetch_stars_today and the stars_today enrichment (TASK-009)
 # ===========================================================================
 
-# Minimalny, zamrożony HTML imitujący stronę github.com/trending.
-# Trzy artykuły:
-#   repo-a: 1,266 stars today  (liczba z przecinkiem)
-#   repo-b: 1 star today       (forma pojedyncza)
-#   repo-c: brak wzmianki o gwiazdkach → None
+# Minimal, frozen HTML mimicking the github.com/trending page.
+# Three articles:
+#   repo-a: 1,266 stars today  (number with a comma)
+#   repo-b: 1 star today       (singular form)
+#   repo-c: no mention of stars → None
 _FAKE_TRENDING_HTML = """
 <!DOCTYPE html>
 <html>
@@ -412,7 +411,7 @@ _FAKE_TRENDING_HTML = """
 
 
 def _patch_stars_client(html: str):
-    """Podmienia httpx.AsyncClient tak, by zwracał odpowiedź z podanym HTML."""
+    """Replaces httpx.AsyncClient so that it returns a response with the given HTML."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.text = html
@@ -425,27 +424,27 @@ def _patch_stars_client(html: str):
 
 
 # ---------------------------------------------------------------------------
-# Test 18 – _fetch_stars_today parsuje liczby poprawnie (offline HTML)
+# Test 18 – _fetch_stars_today parses numbers correctly (offline HTML)
 # ---------------------------------------------------------------------------
-async def test_fetch_stars_today_parsuje_liczby():
+async def test_fetch_stars_today_parses_numbers():
     with _patch_stars_client(_FAKE_TRENDING_HTML):
         result = await _fetch_stars_today()
 
-    # repo-a: 1,266 → 1266 (int, przecinek usunięty)
+    # repo-a: 1,266 → 1266 (int, comma removed)
     assert result.get("owner/repo-a") == 1266
-    # repo-b: 1 star (forma pojedyncza) → 1
+    # repo-b: 1 star (singular form) → 1
     assert result.get("owner/repo-b") == 1
-    # repo-c: brak tekstu o gwiazdkach → None
+    # repo-c: no star text → None
     assert result.get("owner/repo-c") is None
 
 
 # ---------------------------------------------------------------------------
-# Test 19 – enrichment: get_trending z include_stars_today=True uzupełnia pole
+# Test 19 – enrichment: get_trending with include_stars_today=True fills the field
 # ---------------------------------------------------------------------------
-async def test_get_trending_include_stars_today_dopasowanie(monkeypatch):
+async def test_get_trending_include_stars_today_match(monkeypatch):
     items = [
         _make_fake_item(full_name="owner/repo-a"),
-        _make_fake_item(full_name="owner/repo-z"),  # nie ma w mapie stars
+        _make_fake_item(full_name="owner/repo-z"),  # not in the stars map
     ]
     mock_response = _make_mock_response(items)
 
@@ -465,9 +464,9 @@ async def test_get_trending_include_stars_today_dopasowanie(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Test 20 – odporność: wyjątek _fetch_stars_today nie psuje get_trending
+# Test 20 – resilience: a _fetch_stars_today exception does not break get_trending
 # ---------------------------------------------------------------------------
-async def test_get_trending_scraping_exception_nie_psuje_wyniku(monkeypatch):
+async def test_get_trending_scraping_exception_does_not_break_result(monkeypatch):
     items = [_make_fake_item(full_name="owner/repo-x")]
     mock_response = _make_mock_response(items)
 
@@ -483,9 +482,9 @@ async def test_get_trending_scraping_exception_nie_psuje_wyniku(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Test 21 – domyślne include_stars_today=False → _fetch_stars_today nie wywołana
+# Test 21 – default include_stars_today=False → _fetch_stars_today not called
 # ---------------------------------------------------------------------------
-async def test_get_trending_domyslnie_nie_wywoluje_fetch_stars(monkeypatch):
+async def test_get_trending_default_does_not_call_fetch_stars(monkeypatch):
     items = [_make_fake_item(full_name="owner/repo-y")]
     mock_response = _make_mock_response(items)
 
@@ -493,19 +492,19 @@ async def test_get_trending_domyslnie_nie_wywoluje_fetch_stars(monkeypatch):
     monkeypatch.setattr("github_client._fetch_stars_today", mock_fetch)
 
     with _patch_client(mock_response):
-        result = await get_trending()  # include_stars_today=False (domyślnie)
+        result = await get_trending()  # include_stars_today=False (default)
 
     mock_fetch.assert_not_called()
     assert result["repos"][0]["stars_today"] is None
 
 
 # ===========================================================================
-# Testy kształtu koperty provenance (TASK-018)
+# Provenance-envelope shape tests (TASK-018)
 # ===========================================================================
 
 
 # ---------------------------------------------------------------------------
-# Test P1 – get_trending: odpowiedź ma wymagane klucze koperty
+# Test P1 – get_trending: response has the required envelope keys
 # ---------------------------------------------------------------------------
 async def test_get_trending_provenance_keys():
     items = [_make_fake_item(full_name=f"owner/repo{i}") for i in range(3)]
@@ -535,7 +534,7 @@ async def test_get_trending_count_equals_repos_len():
 
 
 # ---------------------------------------------------------------------------
-# Test P3 – get_trending: verify_url zaczyna się od https://github.com/search
+# Test P3 – get_trending: verify_url starts with https://github.com/search
 # ---------------------------------------------------------------------------
 async def test_get_trending_verify_url_starts_with_github_search():
     items = [_make_fake_item()]
@@ -548,7 +547,7 @@ async def test_get_trending_verify_url_starts_with_github_search():
 
 
 # ---------------------------------------------------------------------------
-# Test P4 – get_trending z language=python: verify_url zawiera "python"
+# Test P4 – get_trending with language=python: verify_url contains "python"
 # ---------------------------------------------------------------------------
 async def test_get_trending_verify_url_contains_language():
     items = [_make_fake_item()]
@@ -561,7 +560,7 @@ async def test_get_trending_verify_url_contains_language():
 
 
 # ---------------------------------------------------------------------------
-# Test P5 – get_trending: source_url zaczyna się od https://api.github.com/search
+# Test P5 – get_trending: source_url starts with https://api.github.com/search
 # ---------------------------------------------------------------------------
 async def test_get_trending_source_url_starts_with_api():
     items = [_make_fake_item()]
@@ -574,7 +573,7 @@ async def test_get_trending_source_url_starts_with_api():
 
 
 # ---------------------------------------------------------------------------
-# Test P6 – get_trending_page: odpowiedź ma wymagane klucze koperty
+# Test P6 – get_trending_page: response has the required envelope keys
 # ---------------------------------------------------------------------------
 async def test_get_trending_page_provenance_keys():
     with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
@@ -598,7 +597,7 @@ async def test_get_trending_page_count_equals_repos_len():
 
 
 # ---------------------------------------------------------------------------
-# Test P8 – get_trending_page: verify_url zaczyna się od https://github.com/trending
+# Test P8 – get_trending_page: verify_url starts with https://github.com/trending
 # ---------------------------------------------------------------------------
 async def test_get_trending_page_verify_url_starts_with_trending():
     with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
@@ -608,7 +607,7 @@ async def test_get_trending_page_verify_url_starts_with_trending():
 
 
 # ---------------------------------------------------------------------------
-# Test P9 – get_trending_page: source_url zaczyna się od https://github.com/trending
+# Test P9 – get_trending_page: source_url starts with https://github.com/trending
 # ---------------------------------------------------------------------------
 async def test_get_trending_page_source_url_starts_with_trending():
     with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
@@ -618,12 +617,12 @@ async def test_get_trending_page_source_url_starts_with_trending():
 
 
 # ===========================================================================
-# Testy autoryzacji Bearer token (TASK-010)
+# Bearer token authorization tests (TASK-010)
 # ===========================================================================
 
 
-async def test_get_trending_dodaje_authorization_bearer_gdy_token_ustawiony(monkeypatch):
-    """GITHUB_TOKEN → nagłówek Authorization w formacie Bearer."""
+async def test_get_trending_adds_authorization_bearer_when_token_set(monkeypatch):
+    """GITHUB_TOKEN → Authorization header in Bearer format."""
     monkeypatch.setenv("GITHUB_TOKEN", "test-token-123")
     items = [_make_fake_item()]
     mock_response = _make_mock_response(items)
@@ -641,8 +640,8 @@ async def test_get_trending_dodaje_authorization_bearer_gdy_token_ustawiony(monk
     assert kwargs["headers"].get("Authorization") == "Bearer test-token-123"
 
 
-async def test_get_repo_details_dodaje_authorization_bearer_gdy_token_ustawiony(monkeypatch):
-    """GITHUB_TOKEN → nagłówek Authorization w formacie Bearer dla get_repo_details."""
+async def test_get_repo_details_adds_authorization_bearer_when_token_set(monkeypatch):
+    """GITHUB_TOKEN → Authorization header in Bearer format for get_repo_details."""
     monkeypatch.setenv("GITHUB_TOKEN", "test-token-456")
     data = _make_fake_repo_data()
     mock_response = _make_mock_repo_response(data)
@@ -661,7 +660,7 @@ async def test_get_repo_details_dodaje_authorization_bearer_gdy_token_ustawiony(
 
 
 # ===========================================================================
-# Testy obsługi HTTP 500 dla get_trending (TASK-010)
+# HTTP 500 handling tests for get_trending (TASK-010)
 # ===========================================================================
 
 
@@ -676,13 +675,13 @@ async def test_trending_500_raises_http_error():
 
 
 # ===========================================================================
-# Testy dla get_trending_page (TASK-017)
+# Tests for get_trending_page (TASK-017)
 # ===========================================================================
 
-# Minimalny HTML imitujący stronę github.com/trending z 3 wierszami.
+# Minimal HTML mimicking the github.com/trending page with 3 rows.
 # repo-x: Python, 500 stars today, 12,345 total
-# repo-y: Rust,  3,200 stars this week, brak total
-# repo-z: brak języka, brak gwiazdek
+# repo-y: Rust,  3,200 stars this week, no total
+# repo-z: no language, no stars
 _FAKE_TRENDING_PAGE_HTML = """
 <!DOCTYPE html>
 <html>
@@ -708,7 +707,7 @@ _FAKE_TRENDING_PAGE_HTML = """
 </html>
 """
 
-# HTML bez żadnych artykułów article.Box-row
+# HTML without any article.Box-row articles
 _FAKE_EMPTY_HTML = """
 <!DOCTYPE html>
 <html>
@@ -720,7 +719,7 @@ _FAKE_EMPTY_HTML = """
 
 
 def _patch_trending_page_client(html: str):
-    """Podmienia httpx.AsyncClient tak, by zwracał odpowiedź z podanym HTML."""
+    """Replaces httpx.AsyncClient so that it returns a response with the given HTML."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.text = html
@@ -733,9 +732,9 @@ def _patch_trending_page_client(html: str):
 
 
 # ---------------------------------------------------------------------------
-# Test 24 – get_trending_page parsuje wiersze poprawnie (offline HTML)
+# Test 24 – get_trending_page parses rows correctly (offline HTML)
 # ---------------------------------------------------------------------------
-async def test_get_trending_page_parsuje_wiersze():
+async def test_get_trending_page_parses_rows():
     with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
         result = await get_trending_page()
 
@@ -758,29 +757,29 @@ async def test_get_trending_page_parsuje_wiersze():
 
 
 # ---------------------------------------------------------------------------
-# Test 25 – każdy element ma wymagane klucze
+# Test 25 – every item has the required keys
 # ---------------------------------------------------------------------------
-async def test_get_trending_page_pola_wynikowe():
+async def test_get_trending_page_result_fields():
     with _patch_trending_page_client(_FAKE_TRENDING_PAGE_HTML):
         result = await get_trending_page()
 
     required_keys = {"name", "url", "description", "language", "stars_period", "stars_total"}
     for item in result["repos"]:
-        assert required_keys.issubset(item.keys()), f"Brakujące klucze w: {item}"
+        assert required_keys.issubset(item.keys()), f"Missing keys in: {item}"
 
 
 # ---------------------------------------------------------------------------
-# Test 26 – zły period → ValueError (PRZED wywołaniem sieci)
+# Test 26 – bad period → ValueError (BEFORE any network call)
 # ---------------------------------------------------------------------------
-async def test_get_trending_page_zly_period_rzuca_valueerror():
+async def test_get_trending_page_bad_period_raises_valueerror():
     with pytest.raises(ValueError):
-        await get_trending_page(period="roczny")
+        await get_trending_page(period="yearly")
 
 
 # ---------------------------------------------------------------------------
-# Test 27 – błąd sieci → GitHubAPIError
+# Test 27 – network error → GitHubAPIError
 # ---------------------------------------------------------------------------
-async def test_get_trending_page_blad_sieci_rzuca_github_api_error():
+async def test_get_trending_page_network_error_raises_github_api_error():
     request = httpx.Request("GET", "https://github.com/trending")
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(
@@ -798,9 +797,9 @@ async def test_get_trending_page_blad_sieci_rzuca_github_api_error():
 
 
 # ---------------------------------------------------------------------------
-# Test 28 – gdy parser nie znajdzie wierszy → repos jest [] (nie wyjątek)
+# Test 28 – when the parser finds no rows → repos is [] (not an exception)
 # ---------------------------------------------------------------------------
-async def test_get_trending_page_brak_wierszy_zwraca_pusta_liste():
+async def test_get_trending_page_no_rows_returns_empty_list():
     with _patch_trending_page_client(_FAKE_EMPTY_HTML):
         result = await get_trending_page()
 
@@ -809,10 +808,10 @@ async def test_get_trending_page_brak_wierszy_zwraca_pusta_liste():
 
 
 # ---------------------------------------------------------------------------
-# Test 29 – walidacja period odbywa się PRZED wywołaniem sieci
+# Test 29 – period validation happens BEFORE the network call
 # ---------------------------------------------------------------------------
-async def test_get_trending_page_walidacja_period_przed_siecią():
-    """ValueError musi być rzucony bez żadnego zapytania sieciowego."""
+async def test_get_trending_page_period_validation_before_network():
+    """ValueError must be raised without any network request."""
     mock_client = AsyncMock()
     mock_client.get = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -826,9 +825,9 @@ async def test_get_trending_page_walidacja_period_przed_siecią():
 
 
 # ---------------------------------------------------------------------------
-# Test 30 – błąd HTTP (np. 503) → GitHubAPIError z kodem statusu
+# Test 30 – HTTP error (e.g. 503) → GitHubAPIError with the status code
 # ---------------------------------------------------------------------------
-async def test_get_trending_page_blad_http_rzuca_github_api_error():
+async def test_get_trending_page_http_error_raises_github_api_error():
     request = httpx.Request("GET", "https://github.com/trending")
     real_response = httpx.Response(503, request=request)
     mock_response = MagicMock()
@@ -854,12 +853,12 @@ async def test_get_trending_page_blad_http_rzuca_github_api_error():
 
 
 # ===========================================================================
-# Testy parametru sort (TASK-019)
+# sort parameter tests (TASK-019)
 # ===========================================================================
 
 
-async def test_sort_domyslny_daje_stars_desc():
-    """Bez podania sort: params API mają sort=stars i order=desc, verify_url ma s=stars i o=desc."""
+async def test_sort_default_gives_stars_desc():
+    """Without sort: API params have sort=stars and order=desc, verify_url has s=stars and o=desc."""
     items = [_make_fake_item()]
     mock_response = _make_mock_response(items)
 
@@ -885,10 +884,10 @@ async def test_sort_domyslny_daje_stars_desc():
     ("recently-updated", "updated", "desc", "updated", "desc"),
     ("least-recently-updated", "updated", "asc", "updated", "asc"),
 ])
-async def test_sort_wartosci_mapuja_params_i_verify_url(
+async def test_sort_values_map_params_and_verify_url(
     sort_value, expected_api_sort, expected_api_order, expected_s, expected_o
 ):
-    """Każda wartość sort (poza best-match) mapuje poprawnie params API i verify_url."""
+    """Each sort value (except best-match) maps API params and verify_url correctly."""
     items = [_make_fake_item()]
     mock_response = _make_mock_response(items)
 
@@ -907,8 +906,8 @@ async def test_sort_wartosci_mapuja_params_i_verify_url(
     assert f"o={expected_o}" in result["verify_url"]
 
 
-async def test_sort_best_match_bez_sort_order():
-    """best-match: params API NIE zawierają sort/order, verify_url NIE zawiera s= ani o=."""
+async def test_sort_best_match_no_sort_order():
+    """best-match: API params do NOT include sort/order, verify_url does NOT include s= or o=."""
     items = [_make_fake_item()]
     mock_response = _make_mock_response(items)
 
@@ -927,8 +926,8 @@ async def test_sort_best_match_bez_sort_order():
     assert "&o=" not in result["verify_url"]
 
 
-async def test_sort_invalid_rzuca_valueerror_bez_sieci():
-    """Nieprawidłowa wartość sort rzuca ValueError przed wykonaniem zapytania sieciowego."""
+async def test_sort_invalid_raises_valueerror_without_network():
+    """An invalid sort value raises ValueError before any network request is made."""
     mock_client = AsyncMock()
     mock_client.get = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
