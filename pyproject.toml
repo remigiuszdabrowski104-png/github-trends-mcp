@@ -1,15 +1,23 @@
-[project]
+﻿[project]
 name = "github-trends-mcp"
 version = "0.1.0"
 description = "MCP server exposing GitHub trending repositories and repo details to AI agents"
 readme = "README.md"
 requires-python = ">=3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "TWOJE Imię Nazwisko", email = "twoj@email.com" }]
+keywords = ["mcp", "model-context-protocol", "github", "trending", "ai-agents", "claude"]
 dependencies = [
     "httpx>=0.28.1",
     "mcp>=1.27.2",
     "python-dotenv>=1.2.2",
     "scrapling>=0.4.8",
 ]
+
+[project.urls]
+Homepage = "https://github.com/remigiuszdabrowski104-png/github-trends-mcp"
+Repository = "https://github.com/remigiuszdabrowski104-png/github-trends-mcp"
+Issues = "https://github.com/remigiuszdabrowski104-png/github-trends-mcp/issues"
 
 [dependency-groups]
 dev = [
