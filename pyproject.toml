@@ -5,7 +5,7 @@ description = "MCP server exposing GitHub trending repositories and repo details
 readme = "README.md"
 requires-python = ">=3.13"
 license = { file = "LICENSE" }
-authors = [{ name = "TWOJE Imię Nazwisko", email = "twoj@email.com" }]
+authors = [{ name = "Remigiusz", email = "264867228+remigiuszdabrowski104-png@users.noreply.github.com" }]
 keywords = ["mcp", "model-context-protocol", "github", "trending", "ai-agents", "claude"]
 dependencies = [
     "httpx>=0.28.1",
@@ -27,3 +27,6 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+
+
