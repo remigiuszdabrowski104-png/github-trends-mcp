@@ -21,3 +21,14 @@ mcp_server.log
 *.log
 .coverage
 PROJECT_PLAN.md
+
+# Test & tooling caches
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
