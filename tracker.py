@@ -1,8 +1,8 @@
-"""Zapis i odczyt stanu śledzonych repozytoriów z pliku tracked_repos.json.
+"""Read and write the tracked-repositories state in the tracked_repos.json file.
 
-Moduł odpowiedzialny za trwałe przechowywanie listy śledzonych repozytoriów
-w lokalnym pliku JSON oraz za obliczanie delty (przyrostu) liczby gwiazdek
-pomiędzy kolejnymi migawkami.
+Module responsible for persistently storing the list of tracked repositories
+in a local JSON file, and for computing the delta (increase) in star counts
+between consecutive snapshots.
 """
 
 import json
@@ -14,12 +14,12 @@ TRACKED_FILE = Path(__file__).parent / "tracked_repos.json"
 
 
 def load_tracked() -> dict:
-    """Wczytuje słownik śledzonych repozytoriów z pliku TRACKED_FILE.
+    """Loads the dict of tracked repositories from TRACKED_FILE.
 
     Returns:
-        Słownik z danymi śledzonych repozytoriów lub pusty słownik {},
-        gdy plik nie istnieje, jest pusty, zawiera nieprawidłowy JSON,
-        został zapisany w złym kodowaniu lub nie można go odczytać.
+        A dict of tracked-repository data, or an empty dict {} when the file
+        does not exist, is empty, contains invalid JSON, was saved with a bad
+        encoding, or cannot be read.
     """
     if not TRACKED_FILE.exists():
         return {}
@@ -33,15 +33,14 @@ def load_tracked() -> dict:
 
 
 def save_tracked(data: dict) -> None:
-    """Zapisuje słownik `data` do pliku TRACKED_FILE atomowo przez plik tymczasowy.
+    """Writes the `data` dict to TRACKED_FILE atomically via a temporary file.
 
-    Zapis odbywa się najpierw do pliku tymczasowego obok docelowego,
-    a następnie plik tymczasowy jest atomowo podmieniany na docelowy
-    za pomocą os.replace(). Dzięki temu przerwanie procesu w trakcie
-    zapisu nie uszkodzi pliku docelowego.
+    The data is first written to a temporary file next to the target, and the
+    temporary file is then atomically swapped onto the target using os.replace().
+    This way, interrupting the process mid-write will not corrupt the target file.
 
     Args:
-        data: Słownik ze śledzonymi repozytoriami do zapisania.
+        data: The dict of tracked repositories to save.
     """
     tmp_file = TRACKED_FILE.with_suffix(".json.tmp")
     tmp_file.write_text(
@@ -52,21 +51,21 @@ def save_tracked(data: dict) -> None:
 
 
 def track_repo(repo: str, stars: int) -> int | None:
-    """Dodaje lub aktualizuje śledzone repozytorium i zwraca deltę gwiazdek.
+    """Adds or updates a tracked repository and returns the star delta.
 
-    Funkcja zapamiętuje aktualną liczbę gwiazdek dla podanego repozytorium
-    i porównuje ją z poprzednio zapisaną wartością. Delta = None oznacza
-    pierwsze śledzenie repozytorium (brak wcześniejszego pomiaru), a NIE
-    zerowy przyrost gwiazdek. Przy kolejnych wywołaniach zwracana jest
-    różnica: bieżąca liczba gwiazdek minus poprzednia.
+    The function records the current star count for the given repository and
+    compares it with the previously stored value. A delta of None means this
+    is the first time the repository is tracked (no prior measurement), NOT a
+    zero increase. On subsequent calls it returns the difference: current star
+    count minus previous.
 
     Args:
-        repo: Pełna nazwa repozytorium w formacie "owner/name".
-        stars: Aktualna liczba gwiazdek repozytorium.
+        repo: Full repository name in "owner/name" format.
+        stars: Current star count of the repository.
 
     Returns:
-        Delta gwiazdek (int) przy aktualizacji istniejącego wpisu
-        lub None przy pierwszym śledzeniu danego repozytorium.
+        The star delta (int) when updating an existing entry, or None on the
+        first time the given repository is tracked.
     """
     data = load_tracked()
 
