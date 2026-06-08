@@ -9,6 +9,7 @@ pola `stars_today`.
 import os
 import re
 import urllib.parse
+import logging
 from datetime import datetime, timezone, timedelta
 
 import httpx
@@ -16,6 +17,8 @@ from dotenv import load_dotenv
 from scrapling import Selector
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 # Allowed characters in an owner/name segment (letters, digits, ".", "-", "_");
@@ -210,8 +213,8 @@ async def get_trending(
             for item in results:
                 if item["name"] in stars_map and stars_map[item["name"]] is not None:
                     item["stars_today"] = stars_map[item["name"]]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Skipping stars_today enrichment: %s", exc)
 
     return {
         "source_url": source_url,
