@@ -187,7 +187,6 @@ github-trends-mcp/
 ├── pyproject.toml        # Project metadata and pinned dependencies
 ├── uv.lock               # Locked dependency versions
 ├── .env.example          # Template for the optional GITHUB_TOKEN
-└── PROJECT_PLAN.md        # Development plan and milestones
 ```
 
 ## Tech stack
@@ -199,10 +198,16 @@ github-trends-mcp/
 - **scrapling** — used as a lightweight HTML parser only (no browser/fetchers)
 - **pytest** + **pytest-asyncio** — testing
 
+## Security
+
+The server uses the **stdio** transport by default, which is safe for local use with Claude Desktop, Cursor, and similar clients.
+
+An experimental **HTTP transport** can be enabled via environment variables (`MCP_TRANSPORT=http`, `MCP_HOST`, `MCP_PORT`). It ships **without built-in authentication** (OAuth is planned; see Roadmap). Do **not** bind it to a public interface (e.g. `0.0.0.0`) or expose it to the internet without putting your own authentication in front (for example, a reverse proxy with access control, or a firewall restricting who can connect). For local testing, keep the default `127.0.0.1` host.
+
 ## Roadmap
 
 A future milestone (**M5**) covers running the server remotely so it can be used from a phone: switching the transport from stdio to HTTP, hosting on a VPS, adding OAuth authentication, and connecting it to Claude as a custom connector. The tool logic stays the same — only the serving/auth layer changes.
 
 ## License
 
-Private, personal project — built as a portfolio piece demonstrating MCP server development.
+Released under the [MIT License](LICENSE). Built as a portfolio piece demonstrating MCP server development.
