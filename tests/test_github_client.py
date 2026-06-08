@@ -178,6 +178,11 @@ def _patch_repo_client(mock_response: MagicMock):
     "/name",             # pusty owner
     "a/b/c",             # za dużo części
     "",                  # pusty string
+    "../x",              # proba path traversal
+    "x/..",              # proba path traversal
+    "owner/na me",       # niedozwolona spacja
+    "owner//name",       # podwojny slash
+    ".",                 # pojedyncza kropka
 ])
 async def test_zly_format_repo_rzuca_valueerror(bad_repo):
     with pytest.raises(ValueError):

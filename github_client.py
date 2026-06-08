@@ -18,6 +18,11 @@ from scrapling import Selector
 load_dotenv()
 
 
+# Allowed characters in an owner/name segment (letters, digits, ".", "-", "_");
+# the leading lookahead also rejects exactly "." or ".." to prevent path traversal.
+_REPO_PART_RE = re.compile(r"^(?!\.\.?$)[A-Za-z0-9._-]+$")
+
+
 class GitHubAPIError(Exception):
     """Błąd komunikacji z GitHub API (czytelny komunikat dla użytkownika/agenta)."""
 
@@ -384,7 +389,7 @@ async def get_repo_details(repo: str) -> dict:
         GitHubAPIError: Jeśli wystąpi błąd komunikacji z GitHub API (sieć, rate limit, itp.).
     """
     parts = repo.split("/")
-    if len(parts) != 2 or not parts[0] or not parts[1]:
+    if len(parts) != 2 or not all(_REPO_PART_RE.match(p) for p in parts):
         raise ValueError(
             f"Nieprawidłowy format repo '{repo}'. Oczekiwano: owner/name."
         )
