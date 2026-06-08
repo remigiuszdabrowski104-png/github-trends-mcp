@@ -1,4 +1,4 @@
-﻿[project]
+[project]
 name = "github-trends-mcp"
 version = "0.1.0"
 description = "MCP server exposing GitHub trending repositories and repo details to AI agents"
@@ -27,6 +27,3 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-
-
-

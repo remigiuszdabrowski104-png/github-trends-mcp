@@ -1,9 +1,9 @@
-"""Komunikacja z GitHub API (httpx) oraz opcjonalny scraping.
+"""GitHub API communication (httpx) and optional scraping.
 
-Moduł udostępnia klienta HTTP do wykonywania zapytań do GitHub REST API
-z obsługą limitu zapytań (rate limiting). Opcjonalnie wykorzystuje parser
-Scraplinga do scrapowania strony trending GitHub w celu pozyskania wartości
-pola `stars_today`.
+This module exposes an HTTP client for querying the GitHub REST API
+with rate-limit handling. It optionally uses the Scrapling parser to
+scrape the GitHub trending page in order to obtain the `stars_today`
+field.
 """
 
 import os
@@ -27,16 +27,16 @@ _REPO_PART_RE = re.compile(r"^(?!\.\.?$)[A-Za-z0-9._-]+$")
 
 
 class GitHubAPIError(Exception):
-    """Błąd komunikacji z GitHub API (czytelny komunikat dla użytkownika/agenta)."""
+    """GitHub API communication error (readable message for the user/agent)."""
 
 
 async def _fetch_stars_today(language: str | None = None, period: str = "daily") -> dict:
-    """Pobiera github.com/trending i zwraca mapę {repo (owner/name): stars_today (int)}.
+    """Fetches github.com/trending and returns a map {repo (owner/name): stars_today (int)}.
 
-    Używa lekkiego, adaptacyjnego parsera Scraplinga (bez przeglądarki). Funkcja
-    pomocnicza wykorzystywana opcjonalnie przez get_trending do uzupełnienia
-    pola stars_today. Może rzucić wyjątek (sieć/parsowanie) — wołający (get_trending)
-    traktuje scraping jako najlepszy możliwy efekt i nie pozwala mu zepsuć wyniku.
+    Uses a lightweight, adaptive Scrapling parser (no browser). Helper
+    function used optionally by get_trending to populate the stars_today
+    field. May raise (network/parsing) — the caller (get_trending) treats
+    scraping as best-effort and does not let it break the result.
     """
     base = "https://github.com/trending"
     if language:
@@ -85,43 +85,42 @@ async def get_trending(
     include_stars_today: bool = False,
     sort: str = "most-stars",
 ) -> dict:
-    """Pobiera trendujące repozytoria z GitHub Search API.
+    """Fetches trending repositories from the GitHub Search API.
 
-    GitHub nie udostępnia oficjalnego endpointu /trending, więc używamy
-    wyszukiwarki (nowe repo posortowane po gwiazdkach) jako udokumentowanej
-    aproksymacji trendów.
+    GitHub does not provide an official /trending endpoint, so we use the
+    search API (newly created repos sorted by stars) as a documented
+    approximation of trends.
 
     Args:
-        language: Język programowania do filtrowania (np. "python"). None = wszystkie.
-        period: Okres wyszukiwania: "daily", "weekly" lub "monthly".
-        include_stars_today: Domyślnie False. Gdy True, próbuje uzupełnić stars_today
-            danymi ze strony github.com/trending metodą najlepszego dopasowania
-            — tylko dla repo obecnych również na tej stronie; awaria scrapingu
-            nie wpływa na resztę wyniku.
-        sort: Sposób sortowania wyników (ranking). Domyślnie "most-stars".
-            Dozwolone wartości: "most-stars", "fewest-stars", "most-forks",
-            "fewest-forks", "recently-updated", "least-recently-updated",
-            "best-match".
+        language: Programming language filter (e.g. "python"). None = all.
+        period: Search period: "daily", "weekly" or "monthly".
+        include_stars_today: Defaults to False. When True, attempts to fill
+            stars_today from github.com/trending on a best-effort basis
+            — only for repos also present on that page; a scraping failure
+            does not affect the rest of the result.
+        sort: Result ranking. Defaults to "most-stars". Allowed values:
+            "most-stars", "fewest-stars", "most-forks", "fewest-forks",
+            "recently-updated", "least-recently-updated", "best-match".
 
     Returns:
-        Słownik z kluczami provenance + lista repozytoriów:
-        - source_url (str): surowy URL Search API użyty do pobrania danych,
-        - verify_url (str): adres wyszukiwarki GitHub dla człowieka odtwarzający ten sam filtr,
-        - fetched_at (str): znacznik czasu pobrania w formacie ISO8601 UTC,
-        - count (int): liczba zwróconych repozytoriów,
-        - repos (list[dict]): lista słowników z kluczami: name, description, stars,
-          stars_today, language, url. Pole stars_today ma zawsze wartość None, chyba że
-          include_stars_today=True i scraping zakończy się powodzeniem.
+        A dict with provenance keys plus a repository list:
+        - source_url (str): raw Search API URL used to fetch the data,
+        - verify_url (str): a human-facing GitHub search URL reproducing the same filter,
+        - fetched_at (str): fetch timestamp in ISO8601 UTC format,
+        - count (int): number of repositories returned,
+        - repos (list[dict]): list of dicts with keys: name, description, stars,
+          stars_today, language, url. The stars_today field is always None unless
+          include_stars_today=True and scraping succeeds.
 
     Raises:
-        ValueError: Jeśli `period` nie jest jednym z: daily, weekly, monthly,
-            lub jeśli `sort` nie jest jedną z dozwolonych wartości.
-        GitHubAPIError: Jeśli wystąpi błąd komunikacji z GitHub API (sieć, rate limit, itp.).
+        ValueError: If `period` is not one of: daily, weekly, monthly,
+            or if `sort` is not one of the allowed values.
+        GitHubAPIError: If a GitHub API communication error occurs (network, rate limit, etc.).
     """
     period_days = {"daily": 1, "weekly": 7, "monthly": 30}
     if period not in period_days:
         raise ValueError(
-            f"Nieprawidłowy okres '{period}'. Oczekiwano: daily, weekly, monthly."
+            f"Invalid period '{period}'. Expected one of: daily, weekly, monthly."
         )
 
     sort_map = {
@@ -377,24 +376,25 @@ async def get_trending_page(
 
 
 async def get_repo_details(repo: str) -> dict:
-    """Pobiera szczegółowe informacje o repozytorium GitHub.
+    """Fetches detailed information about a GitHub repository.
 
     Args:
-        repo: Nazwa repozytorium w formacie owner/name (np. modelcontextprotocol/python-sdk).
+        repo: Repository name in owner/name format (e.g. modelcontextprotocol/python-sdk).
 
     Returns:
-        Słownik z kluczami: name, description, stars, forks, language, topics,
-        last_commit, url. Pole last_commit to data ostatniego pushu (pushed_at)
-        do dowolnej gałęzi, nie dokładny czas ostatniego commitu do gałęzi domyślnej.
+        A dict with keys: name, description, stars, forks, language, topics,
+        last_commit, url. The last_commit field is the date of the last push
+        (pushed_at) to any branch, not the exact time of the last commit to
+        the default branch.
 
     Raises:
-        ValueError: Jeśli `repo` nie jest w formacie owner/name.
-        GitHubAPIError: Jeśli wystąpi błąd komunikacji z GitHub API (sieć, rate limit, itp.).
+        ValueError: If `repo` is not in owner/name format.
+        GitHubAPIError: If a GitHub API communication error occurs (network, rate limit, etc.).
     """
     parts = repo.split("/")
     if len(parts) != 2 or not all(_REPO_PART_RE.match(p) for p in parts):
         raise ValueError(
-            f"Nieprawidłowy format repo '{repo}'. Oczekiwano: owner/name."
+            f"Invalid repo format '{repo}'. Expected: owner/name."
         )
 
     owner, name = parts
