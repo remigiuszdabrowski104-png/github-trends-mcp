@@ -1,4 +1,4 @@
-﻿# github-trends-mcp
+# github-trends-mcp
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that connects AI agents (Claude Desktop, Cursor, Kilo Code) to the GitHub API and serves fresh data about trending repositories.
 
@@ -6,30 +6,30 @@ Instead of asking an agent "what's trending on GitHub right now?" and getting a 
 
 ## Features
 
-- **`get_trending`** â€” list trending repositories via the official GitHub Search API (newly created repos ranked by stars), optionally filtered by language and time period, with a selectable result ranking (the `sort` parameter).
-- **`get_trending_page`** â€” list the repositories shown on the real `github.com/trending` page (by daily/weekly/monthly star gains), via lightweight web scraping.
-- **`get_repo_details`** â€” fetch details for a specific repository (stars, forks, language, topics, last push).
-- **`track_repo`** â€” record a repository's star count locally and report the change (delta) since the last check.
-- **Built-in provenance** â€” every trending response carries `source_url`, `verify_url`, `fetched_at`, and `count`, so the data can be traced and checked at its source instead of taken on trust.
-- Graceful error handling (rate limits, missing repos, network failures) â€” readable messages instead of crashes.
+- **`get_trending`** — list trending repositories via the official GitHub Search API (newly created repos ranked by stars), optionally filtered by language and time period, with a selectable result ranking (the `sort` parameter).
+- **`get_trending_page`** — list the repositories shown on the real `github.com/trending` page (by daily/weekly/monthly star gains), via lightweight web scraping.
+- **`get_repo_details`** — fetch details for a specific repository (stars, forks, language, topics, last push).
+- **`track_repo`** — record a repository's star count locally and report the change (delta) since the last check.
+- **Built-in provenance** — every trending response carries `source_url`, `verify_url`, `fetched_at`, and `count`, so the data can be traced and checked at its source instead of taken on trust.
+- Graceful error handling (rate limits, missing repos, network failures) — readable messages instead of crashes.
 - File logging to `mcp_server.log`.
 
 ## How trending data is sourced
 
-GitHub's REST API has **no official `/trending` endpoint**, so this server offers two complementary tools â€” and the distinction matters:
+GitHub's REST API has **no official `/trending` endpoint**, so this server offers two complementary tools — and the distinction matters:
 
-- **`get_trending`** uses the official **GitHub Search API** (`/search/repositories?sort=stars&order=desc` with a `created:` date filter). It is **reliable and stable** (an official API that won't break), but it lists *recently created* repositories ranked by total stars â€” so it surfaces promising young projects, which naturally have smaller star counts. Think "new and rising."
-- **`get_trending_page`** scrapes the actual **`github.com/trending`** page, returning exactly what you see there (established repos ranked by their star gain *today / this week / this month*). It matches the familiar Trending page, but because it relies on scraping, it is **best-effort** â€” if GitHub changes the page layout, the parser may need an update.
+- **`get_trending`** uses the official **GitHub Search API** (`/search/repositories?sort=stars&order=desc` with a `created:` date filter). It is **reliable and stable** (an official API that won't break), but it lists *recently created* repositories ranked by total stars — so it surfaces promising young projects, which naturally have smaller star counts. Think "new and rising."
+- **`get_trending_page`** scrapes the actual **`github.com/trending`** page, returning exactly what you see there (established repos ranked by their star gain *today / this week / this month*). It matches the familiar Trending page, but because it relies on scraping, it is **best-effort** — if GitHub changes the page layout, the parser may need an update.
 
 In short: use `get_trending_page` for "what's hot right now" (matches the website), and `get_trending` for "what new projects are gaining traction" (official API, rock-solid). The optional `stars_today` enrichment on `get_trending` is also parsed from `github.com/trending` (best-effort).
 
-**Verifiable by design.** Both trending tools wrap their results in a small *provenance envelope*: `source_url` (the exact address the data was fetched from), `verify_url` (a link you can open to check the list yourself), `fetched_at` (an ISO-8601 UTC timestamp), `count`, and `repos` (the list itself). For `get_trending_page` the `verify_url` opens the exact Trending page that was scraped; for `get_trending` it opens a GitHub search that reproduces the same `created:` filter and the chosen ranking. This keeps the promise of *real data, not hallucination* â€” every answer can point back to where it came from.
+**Verifiable by design.** Both trending tools wrap their results in a small *provenance envelope*: `source_url` (the exact address the data was fetched from), `verify_url` (a link you can open to check the list yourself), `fetched_at` (an ISO-8601 UTC timestamp), `count`, and `repos` (the list itself). For `get_trending_page` the `verify_url` opens the exact Trending page that was scraped; for `get_trending` it opens a GitHub search that reproduces the same `created:` filter and the chosen ranking. This keeps the promise of *real data, not hallucination* — every answer can point back to where it came from.
 
 ## Requirements
 
 - **Python 3.13** (managed automatically by `uv`)
-- [**uv**](https://docs.astral.sh/uv/) â€” package and environment manager
-- (Optional) [**Node.js**](https://nodejs.org/) â€” only if you want to use the MCP Inspector for manual testing
+- [**uv**](https://docs.astral.sh/uv/) — package and environment manager
+- (Optional) [**Node.js**](https://nodejs.org/) — only if you want to use the MCP Inspector for manual testing
 
 A GitHub token is **not required**. Without one you get 60 API requests/hour, which is plenty for personal use; with one you get 5000/hour (see [Optional: GitHub token](#optional-github-token)).
 
@@ -48,7 +48,7 @@ That's it. `uv sync` creates a virtual environment with the pinned Python versio
 
 ## Running the server
 
-The server speaks MCP over **stdio**, so you normally don't run it by hand â€” your AI client launches it. To verify it starts:
+The server speaks MCP over **stdio**, so you normally don't run it by hand — your AI client launches it. To verify it starts:
 
 ```bash
 uv run python server.py
@@ -82,11 +82,11 @@ Add the server to your Claude Desktop configuration file:
 }
 ```
 
-Replace `ABSOLUTE_PATH_TO/github-trends-mcp` with the full path to this project (on Windows, e.g. `C:\\Users\\you\\dev\\github-trends-mcp` â€” note the doubled backslashes in JSON). Restart Claude Desktop; the four tools will appear.
+Replace `ABSOLUTE_PATH_TO/github-trends-mcp` with the full path to this project (on Windows, e.g. `C:\\Users\\you\\dev\\github-trends-mcp` — note the doubled backslashes in JSON). Restart Claude Desktop; the four tools will appear.
 
 ### Cursor
 
-Add an equivalent entry to Cursor's MCP settings (`File â†’ Preferences â†’ Cursor Settings â†’ MCP`), using the same `command`/`args` as above.
+Add an equivalent entry to Cursor's MCP settings (`File → Preferences → Cursor Settings → MCP`), using the same `command`/`args` as above.
 
 ### Testing with the MCP Inspector
 
@@ -111,7 +111,7 @@ List trending repositories (GitHub Search API).
 | `include_stars_today` | `bool` | `False` | When `True`, attempts to fill `stars_today` from `github.com/trending` (best-effort). |
 | `sort` | `str` | `"most-stars"` | Result ranking. One of: `"most-stars"`, `"fewest-stars"`, `"most-forks"`, `"fewest-forks"`, `"recently-updated"`, `"least-recently-updated"`, `"best-match"`. |
 
-Returns a **provenance envelope** (a dict): `source_url`, `verify_url`, `fetched_at` (ISO-8601 UTC), `count`, and `repos` â€” a list of objects, each with `name`, `description`, `stars`, `stars_today` (`None` if not retrieved), `language`, `url`. The `verify_url` reflects the chosen `sort` (for `"best-match"` it carries no sort parameters).
+Returns a **provenance envelope** (a dict): `source_url`, `verify_url`, `fetched_at` (ISO-8601 UTC), `count`, and `repos` — a list of objects, each with `name`, `description`, `stars`, `stars_today` (`None` if not retrieved), `language`, `url`. The `verify_url` reflects the chosen `sort` (for `"best-match"` it carries no sort parameters).
 
 ### `get_trending_page`
 
@@ -122,7 +122,7 @@ List the repositories from the real `github.com/trending` page (best-effort web 
 | `language` | `str` (optional) | `None` | Programming language filter, e.g. `"python"`, `"rust"`. `None` = all languages. |
 | `period` | `str` | `"daily"` | Time window: `"daily"`, `"weekly"`, or `"monthly"`. |
 
-Returns a **provenance envelope** (a dict): `source_url`, `verify_url`, `fetched_at` (ISO-8601 UTC), `count`, and `repos` â€” a list of objects, each with `name`, `url`, `description`, `language`, `stars_period` (star gain in the selected period), `stars_total` (total stars). Any repo field may be `None`/`""` if absent on the page. If the page can't be parsed, `repos` is empty and `count` is `0` rather than failing.
+Returns a **provenance envelope** (a dict): `source_url`, `verify_url`, `fetched_at` (ISO-8601 UTC), `count`, and `repos` — a list of objects, each with `name`, `url`, `description`, `language`, `stars_period` (star gain in the selected period), `stars_total` (total stars). Any repo field may be `None`/`""` if absent on the page. If the page can't be parsed, `repos` is empty and `count` is `0` rather than failing.
 
 ### `get_repo_details`
 
@@ -166,7 +166,7 @@ The `.env` file is git-ignored and never committed.
 
 - It is only attempted when you pass `include_stars_today=True`.
 - It is parsed from `github.com/trending`, which lists a different (and sometimes non-overlapping) set of repositories than the Search API. When a repo isn't on that page, `stars_today` stays `None`.
-- If the parsing fails for any reason, `get_trending` still returns its normal results â€” the enrichment never breaks the core call.
+- If the parsing fails for any reason, `get_trending` still returns its normal results — the enrichment never breaks the core call.
 
 ## Running the tests
 
@@ -180,23 +180,23 @@ The suite covers all four tools, error handling, the tracker, and logging.
 
 ```
 github-trends-mcp/
-â”śâ”€â”€ server.py             # FastMCP server â€” registers the 4 MCP tools (stdio transport)
-â”śâ”€â”€ github_client.py      # GitHub API calls, error handling, stars_today parser
-â”śâ”€â”€ tracker.py            # Local star tracking (tracked_repos.json) + delta calculation
-â”śâ”€â”€ tests/                # pytest suite (mocked HTTP, no live calls)
-â”śâ”€â”€ pyproject.toml        # Project metadata and pinned dependencies
-â”śâ”€â”€ uv.lock               # Locked dependency versions
-â”śâ”€â”€ .env.example          # Template for the optional GITHUB_TOKEN
+├── server.py             # FastMCP server — registers the 4 MCP tools (stdio transport)
+├── github_client.py      # GitHub API calls, error handling, stars_today parser
+├── tracker.py            # Local star tracking (tracked_repos.json) + delta calculation
+├── tests/                # pytest suite (mocked HTTP, no live calls)
+├── pyproject.toml        # Project metadata and pinned dependencies
+├── uv.lock               # Locked dependency versions
+└── .env.example          # Template for the optional GITHUB_TOKEN
 ```
 
 ## Tech stack
 
 - **Python 3.13** (via `uv`)
-- **mcp** (the official SDK's bundled FastMCP) â€” MCP server framework
-- **httpx** â€” async HTTP client
-- **python-dotenv** â€” optional token loading
-- **scrapling** â€” used as a lightweight HTML parser only (no browser/fetchers)
-- **pytest** + **pytest-asyncio** â€” testing
+- **mcp** (the official SDK's bundled FastMCP) — MCP server framework
+- **httpx** — async HTTP client
+- **python-dotenv** — optional token loading
+- **scrapling** — used as a lightweight HTML parser only (no browser/fetchers)
+- **pytest** + **pytest-asyncio** — testing
 
 ## Security
 
@@ -206,7 +206,7 @@ An experimental **HTTP transport** can be enabled via environment variables (`MC
 
 ## Roadmap
 
-A future milestone (**M5**) covers running the server remotely so it can be used from a phone: switching the transport from stdio to HTTP, hosting on a VPS, adding OAuth authentication, and connecting it to Claude as a custom connector. The tool logic stays the same â€” only the serving/auth layer changes.
+A future milestone (**M5**) covers running the server remotely so it can be used from a phone: switching the transport from stdio to HTTP, hosting on a VPS, adding OAuth authentication, and connecting it to Claude as a custom connector. The tool logic stays the same — only the serving/auth layer changes.
 
 ## License
 
